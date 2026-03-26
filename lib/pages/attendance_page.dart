@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:another_flushbar/flushbar.dart';
 
 class AttendancePage extends StatefulWidget {
   final int employeeId;
@@ -233,151 +234,171 @@ Future<void> pickImage(String type) async {
     });
   }
 }
-  Future<void> handleSubmit() async {
-    if (!isFormValid()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields')),
-      );
-      return;
-    }
-     setState(() {
+ Future<void> handleSubmit() async {
+  if (!isFormValid()) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Please fill all required fields')),
+    );
+    return;
+  }
+
+  setState(() {
     isLoading = true;
   });
-    try {
-      File? stampedSelfie;
-      File? stampedOdometer;
-if (attendanceType == "day_over") {
-   try {
+
+  final submittedAttendanceType = attendanceType;   // <-- save first
+  final submittedWorkType = workType;
+  final submittedWorkingArea = workingArea;
+  final submittedTravelMode = travelMode;
+  final submittedVehicleType = vehicleType;
+  final submittedVisitLocation = visitLocation;
+  final submittedOdometerReading =
+      odometerReading.isNotEmpty ? odometerReading : null;
+
+  try {
+    File? stampedSelfie;
+    File? stampedOdometer;
+
+
+    if (submittedAttendanceType == "day_over") {
+  try {
     currentLocation = await getFullLocationDetails();
   } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Unable to fetch location. Please enable GPS."),
-      ),
-    );
+    Flushbar(
+      message: "Unable to fetch location. Please enable GPS.",
+      duration: const Duration(seconds: 3),
+      flushbarPosition: FlushbarPosition.BOTTOM, //  bottom position
+      backgroundColor: Colors.red,
+      margin: const EdgeInsets.all(20),
+      borderRadius: BorderRadius.circular(8),
+      icon: const Icon(Icons.location_off, color: Colors.white),
+    ).show(context);
+
     setState(() => isLoading = false);
-    return; 
+    return;
   }
 }
-if (selfieImage != null) {
-  stampedSelfie = await addLocationStamp(selfieImage!);
-}
 
-if (odometerImage != null) {
-  stampedOdometer = await addLocationStamp(odometerImage!);
-}
+    if (selfieImage != null) {
+      stampedSelfie = await addLocationStamp(selfieImage!);
+    }
 
-final compressedSelfie = stampedSelfie != null
-    ? await compressImage(stampedSelfie)
-    : null;
+    if (odometerImage != null) {
+      stampedOdometer = await addLocationStamp(odometerImage!);
+    }
 
-final compressedOdometer = stampedOdometer != null
-    ? await compressImage(stampedOdometer)
-    : null;
+    final compressedSelfie =
+        stampedSelfie != null ? await compressImage(stampedSelfie) : null;
+    final compressedOdometer =
+        stampedOdometer != null ? await compressImage(stampedOdometer) : null;
 
-      final response = await ApiService.markAttendance(
-        employeeId: widget.employeeId,
-        token: widget.token,
-        status: attendanceType!,
-        workType: workType,
-        fieldWorkType: workingArea,
-        travelMode: travelMode,
-        vehicleType: vehicleType,
-        visitLocation: attendanceType == "day_over" ? currentLocation : visitLocation,
-        odometerReading: odometerReading.isNotEmpty ? odometerReading : null,
-        selfie: compressedSelfie ?? stampedSelfie ?? selfieImage,
-        odometerImage: compressedOdometer ?? stampedOdometer ?? odometerImage,
-      );
-
-      if (compressedSelfie != null) {
-        print("Selfie size (KB): ${await compressedSelfie.length() / 1024}");
-      }
-
-      if (compressedOdometer != null) {
-        print(
-          "Odometer size (KB): ${await compressedOdometer.length() / 1024}",
-        );
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(response['message'] ?? 'Attendance submitted')),
-      );
-      resetForm();
-   final service = FlutterBackgroundService();
-
-if (attendanceType == "present") {
-  bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-  if (!serviceEnabled) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Please enable GPS")),
+    final response = await ApiService.markAttendance(
+      employeeId: widget.employeeId,
+      token: widget.token,
+      status: submittedAttendanceType!,
+      workType: submittedWorkType,
+      fieldWorkType: submittedWorkingArea,
+      travelMode: submittedTravelMode,
+      vehicleType: submittedVehicleType,
+      visitLocation: submittedAttendanceType == "day_over"
+          ? currentLocation
+          : submittedVisitLocation,
+      odometerReading: submittedOdometerReading,
+      selfie: compressedSelfie ?? stampedSelfie ?? selfieImage,
+      odometerImage: compressedOdometer ?? stampedOdometer ?? odometerImage,
     );
+
+  Flushbar(
+  message: response['message'] ?? 'Attendance submitted',
+  duration: const Duration(seconds: 2),
+  flushbarPosition: FlushbarPosition.BOTTOM,
+  backgroundColor: Colors.green,
+  margin: const EdgeInsets.all(20),
+  borderRadius: BorderRadius.circular(8),
+  icon: const Icon(Icons.check_circle, color: Colors.white),
+).show(context);
+
+    final service = FlutterBackgroundService();
+
+      if (submittedAttendanceType == "present") {
+  bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
+  if (!serviceEnabled) {
+    await Flushbar(
+      message: "Please enable GPS",
+      duration: const Duration(seconds: 2),
+      flushbarPosition: FlushbarPosition.BOTTOM,
+      backgroundColor: Colors.orange,
+      margin: const EdgeInsets.all(20),
+      borderRadius: BorderRadius.circular(8),
+      icon: const Icon(Icons.location_on, color: Colors.white),
+    ).show(context);
+
     await Geolocator.openLocationSettings();
     return;
   }
 
-  PermissionStatus foreground = await Permission.locationWhenInUse.status;
-  if (!foreground.isGranted) {
-    foreground = await Permission.locationWhenInUse.request();
-  }
 
-  if (!foreground.isGranted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Foreground location permission is required")),
-    );
-    return;
-  }
+      PermissionStatus foreground = await Permission.locationWhenInUse.status;
+      if (!foreground.isGranted) {
+        foreground = await Permission.locationWhenInUse.request();
+      }
 
-  PermissionStatus background = await Permission.locationAlways.status;
-  if (!background.isGranted) {
-    background = await Permission.locationAlways.request();
-  }
+      if (!foreground.isGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Foreground location permission is required"),
+          ),
+        );
+        return;
+      }
 
-  if (!background.isGranted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text("Please allow background location from settings"),
-        action: SnackBarAction(
-          label: "Settings",
-          onPressed: openAppSettings,
-        ),
-      ),
-    );
-    return;
-  }
+      PermissionStatus background = await Permission.locationAlways.status;
+      if (!background.isGranted) {
+        background = await Permission.locationAlways.request();
+      }
 
-  if (await Permission.notification.isDenied) {
-    await Permission.notification.request();
-  }
+      if (!background.isGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Please allow background location from settings"),
+            action: SnackBarAction(
+              label: "Settings",
+              onPressed: openAppSettings,
+            ),
+          ),
+        );
+        return;
+      }
 
-  bool running = await service.isRunning();
-  print("Service running before start: $running");
+      if (await Permission.notification.isDenied) {
+        await Permission.notification.request();
+      }
 
-  if (!running) {
-    await service.startService();
-    print("Background service started");
-  }
-}
-
-if (attendanceType == "day_over") {
-  bool running = await service.isRunning();
-  print("Service running before stop: $running");
-
-  if (running) {
-    service.invoke("stopService");
-    print("Background service stopped");
-  }
-}
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      final running = await service.isRunning();
+      if (!running) {
+        await service.startService();
+      }
     }
-    finally {
+
+    if (submittedAttendanceType == "day_over") {
+      final running = await service.isRunning();
+      if (running) {
+        service.invoke("stopService");
+      }
+    }
+
+    resetForm();   // <-- move here, at the end
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error: $e')),
+    );
+  } finally {
     setState(() {
       isLoading = false;
     });
   }
-  }
+}
 
   void resetForm() {
     setState(() {

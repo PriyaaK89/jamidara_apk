@@ -46,6 +46,9 @@ dependencies:
   flutter_background_service: ^5.0.5
   flutter_local_notifications: ^17.0.0
   shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.2.2
+  another_flushbar: ^1.12.30
+  dropdown_search: ^5.0.6
 
 dev_dependencies:
   flutter_test:
@@ -77,6 +80,7 @@ flutter:
     - assets/images/logo.png
     - assets/images/jsc_logo.png
     - assets/images/jamidara_logo.png
+    - assets/images/mirrorless.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

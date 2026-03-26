@@ -29,12 +29,19 @@ Future<void> initializeService() async {
     'location_channel',
     'Location Tracking',
     description: 'This channel is used for location tracking.',
-    importance: Importance.high,
+    importance: Importance.low, // foreground service ke liye low ya higher theek hai
     playSound: false,
   );
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+
+  const InitializationSettings initializationSettings =
+      InitializationSettings(
+    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
@@ -54,40 +61,29 @@ Future<void> initializeService() async {
     iosConfiguration: IosConfiguration(),
   );
 }
-
 Future<void> sendLocation(ServiceInstance service) async {
   try {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+
     final employeeId = prefs.getInt('employee_id');
     final token = prefs.getString('token');
 
-    print("Stored employeeId: $employeeId");
-    print("Stored token: $token");
-
     if (employeeId == null || token == null || token.isEmpty) {
-      print("No employee session found. Location not sent.");
       return;
     }
 
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      print("GPS / Location service is disabled");
-      return;
-    }
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
 
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
 
-    if (permission == LocationPermission.denied) {
-      print("Location permission denied");
-      return;
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      print("Location permission denied forever");
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
       return;
     }
 
@@ -97,12 +93,6 @@ Future<void> sendLocation(ServiceInstance service) async {
       ),
     );
 
-    print("Location fetched:");
-    print("Latitude: ${position.latitude}");
-    print("Longitude: ${position.longitude}");
-    print("Accuracy: ${position.accuracy}");
-    print("Speed: ${position.speed}");
-
     await ApiService.sendLocation(
       employeeId: employeeId,
       token: token,
@@ -111,20 +101,12 @@ Future<void> sendLocation(ServiceInstance service) async {
       accuracy: position.accuracy,
       speed: position.speed,
     );
-
-    if (service is AndroidServiceInstance) {
-      service.setForegroundNotificationInfo(
-        title: "Tracking Active",
-        content: "Lat: ${position.latitude}, Lng: ${position.longitude}",
-      );
-    }
-
-    print("Location sent successfully");
   } catch (e, stack) {
     print("Location error: $e");
     print("Stack trace: $stack");
   }
 }
+
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
@@ -134,26 +116,21 @@ void onStart(ServiceInstance service) async {
   Timer? timer;
 
   if (service is AndroidServiceInstance) {
-    service.setAsForegroundService();
-
+    await service.setAsForegroundService();
     service.setForegroundNotificationInfo(
       title: "Tracking Active",
-      content: "Initializing location service...",
+      content: "Location tracking is running",
     );
   }
 
   service.on('stopService').listen((event) {
-    print("Stop service event received");
     timer?.cancel();
     service.stopSelf();
   });
 
-  // First call immediately
   await sendLocation(service);
 
-  // Then every 1 minute
   timer = Timer.periodic(const Duration(minutes: 1), (timer) async {
-    print("Running background location task...");
     await sendLocation(service);
   });
 }

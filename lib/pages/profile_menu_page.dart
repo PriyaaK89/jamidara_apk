@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/services/storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'login_page.dart';
+import '../pages/EmpProfile/visit_report_page.dart';
+import '../pages/main_screen.dart';
+import '../layout/app_router.dart';
+import '../pages/EmpProfile/attendance_report_page.dart';
 
 class ProfileMenuPage extends StatelessWidget {
   final bool clearSavedCredentialsOnLogout;
+  final Function(int)? onTabChange;
 
   const ProfileMenuPage({
     super.key,
     this.clearSavedCredentialsOnLogout = false,
+    this.onTabChange,
   });
 
   Future<void> _logout(BuildContext context) async {
@@ -28,14 +35,14 @@ class ProfileMenuPage extends StatelessWidget {
     if (!context.mounted) return;
 
     Navigator.pushAndRemoveUntil(
-    context,
-    MaterialPageRoute(
-      builder: (_) => const LoginPage(
-        message: "Logout Successful", //  pass message
+      context,
+      MaterialPageRoute(
+        builder: (_) => const LoginPage(
+          message: "Logout Successful", //  pass message
+        ),
       ),
-    ),
-    (route) => false,
-  );
+      (route) => false,
+    );
   }
 
   Widget _buildTile({
@@ -50,9 +57,7 @@ class ProfileMenuPage extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       elevation: 1.5,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: iconColor.withOpacity(0.12),
@@ -60,10 +65,7 @@ class ProfileMenuPage extends StatelessWidget {
         ),
         title: Text(
           title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: textColor,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
         ),
         subtitle: subtitle != null ? Text(subtitle) : null,
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
@@ -128,10 +130,7 @@ class ProfileMenuPage extends StatelessWidget {
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF1B5E20),
-                      Color(0xFF43A047),
-                    ],
+                    colors: [Color(0xFF1B5E20), Color(0xFF43A047)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -164,9 +163,7 @@ class ProfileMenuPage extends StatelessWidget {
                           SizedBox(height: 4),
                           Text(
                             'Jamidara Seeds Corporation',
-                            style: TextStyle(
-                              color: Colors.white70,
-                            ),
+                            style: TextStyle(color: Colors.white70),
                           ),
                         ],
                       ),
@@ -188,11 +185,49 @@ class ProfileMenuPage extends StatelessWidget {
                       onTap: () {},
                     ),
                     _buildTile(
+  context: context,
+  icon: Icons.fingerprint,
+  title: 'My Attendance',
+  subtitle: 'Check attendance status and records',
+ onTap: () async {
+  Navigator.pop(context);
+
+  final token = await StorageService.getToken();
+  final employeeId = await StorageService.getEmployeeId();
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => AppRouter(
+        employeeId: employeeId!,
+        token: token!,
+        initialRoute: "attendance_report",
+      ),
+    ),
+  );
+},
+),
+                    _buildTile(
                       context: context,
-                      icon: Icons.fingerprint,
-                      title: 'My Attendance',
-                      subtitle: 'Check attendance status and records',
-                      onTap: () {},
+                      icon: Icons.location_on_outlined,
+                      title: 'My Visits',
+                      subtitle: 'Check market visit activities',
+                      onTap: () async {
+                        Navigator.pop(context);
+
+                        final token = await StorageService.getToken();
+                        final employeeId = await StorageService.getEmployeeId();
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AppRouter(
+                              employeeId: employeeId!,
+                              token: token!,
+                              initialRoute: "visit_report", ),
+                          ),
+                        );
+                      },
                     ),
                     _buildTile(
                       context: context,
@@ -201,13 +236,7 @@ class ProfileMenuPage extends StatelessWidget {
                       subtitle: 'View assigned targets and progress',
                       onTap: () {},
                     ),
-                    _buildTile(
-                      context: context,
-                      icon: Icons.location_on_outlined,
-                      title: 'My Visits',
-                      subtitle: 'Check market visit activities',
-                      onTap: () {},
-                    ),
+
                     _buildTile(
                       context: context,
                       icon: Icons.shopping_cart_outlined,
@@ -216,12 +245,28 @@ class ProfileMenuPage extends StatelessWidget {
                       onTap: () {},
                     ),
                     _buildTile(
-                      context: context,
-                      icon: Icons.lock_outline,
-                      title: 'Change Password',
-                      subtitle: 'Update account password',
-                      onTap: () {},
-                    ),
+  context: context,
+  icon: Icons.monetization_on,
+  title: 'My Salary Report',
+  subtitle: 'View you daily salary',
+  onTap: () async {
+    Navigator.pop(context);
+
+    final token = await StorageService.getToken();
+    final employeeId = await StorageService.getEmployeeId();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AppRouter(
+          employeeId: employeeId!,
+          token: token!,
+          initialRoute: "salary_report", //  IMPORTANT
+        ),
+      ),
+    );
+  },
+),
                     _buildTile(
                       context: context,
                       icon: Icons.support_agent,

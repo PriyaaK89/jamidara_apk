@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'attendance_page.dart';
 import 'target_page.dart';
 import 'visit_page.dart';
 import 'order_page.dart';
-import '../widgets/quick_action_bottom_sheet.dart';
 import 'profile_menu_page.dart';
-import '../pages/hotel_expenses_page.dart';
-import '../widgets/global_add_button.dart';
 import '../pages/expense_page.dart';
+import '../pages/quick_action_page.dart';
+import '../pages/dashboard_page.dart';
 
 class MainScreen extends StatefulWidget {
   final int employeeId;
   final String token;
   final Function(String, String, String)? onExpenseSelect;
+  final Widget? customPage;
 
-  const MainScreen({super.key, required this.employeeId, required this.token , this.onExpenseSelect,});
+  const MainScreen({
+    super.key,
+    required this.employeeId,
+    required this.token,
+    this.onExpenseSelect,
+    this.customPage,
+  });
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -32,11 +39,43 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
 
     _pages = [
-      AttendancePage(employeeId: widget.employeeId, token: widget.token),
-      const TargetPage(),
+       DashboardPage(employeeId: widget.employeeId), //  FIRST PAGE
+  AttendancePage(employeeId: widget.employeeId, token: widget.token),
+
       const VisitPage(),
       const OrderPage(),
-      const Center(child: Text("More Page", style: TextStyle(fontSize: 20))),
+      // const Center(child: Text("More Page", style: TextStyle(fontSize: 20))),
+      QuickActionsPage(
+  onTabChange: (index) {
+    if (index == -1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ExpensePage(
+  expenseType: currentExpenseType,
+  title: currentTitle,
+  remarks: currentRemarks,
+  onBackToQuickActions: () {
+    Navigator.pop(context); //  go back to QuickActionsPage
+  },
+),
+        ),
+      );
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
+  },
+
+  onExpenseSelect: (type, title, remarks) {
+    setState(() {
+      currentExpenseType = type;
+      currentTitle = title;
+      currentRemarks = remarks;
+    });
+  },
+),
     ];
   }
 
@@ -50,8 +89,14 @@ class _MainScreenState extends State<MainScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            const ProfileMenuPage(clearSavedCredentialsOnLogout: false),
+      builder: (_) => ProfileMenuPage(
+  clearSavedCredentialsOnLogout: false,
+  onTabChange: (index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  },
+),
       ),
     );
   }
@@ -61,7 +106,11 @@ class _MainScreenState extends State<MainScreen> {
       padding: const EdgeInsets.only(top: 50, left: 16, right: 16, bottom: 16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color.fromARGB(255, 37, 82, 40), Color.fromARGB(255, 48, 110, 51), Color.fromARGB(255, 115, 167, 117)],
+          colors: [
+            Color.fromARGB(255, 37, 82, 40),
+            Color.fromARGB(255, 48, 110, 51),
+            Color.fromARGB(255, 115, 167, 117),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -125,46 +174,35 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+@override
+Widget build(BuildContext context) {
+  return WillPopScope(
+    onWillPop: () async {
+if (Navigator.canPop(context)) {
+  return true; // let current screen handle back
+}
+
+if (_selectedIndex != 0) {
+  setState(() {
+    _selectedIndex = 0;
+  });
+  return false;
+} else {
+  SystemNavigator.pop();
+  return false;
+}
+    },
+
+    child: Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
 
       body: Column(
         children: [
           _buildHeader(),
           // Expanded(child: _pages[_selectedIndex]),
-          Expanded(
-  child: _selectedIndex == 4
-      ? ExpensePage(
-          expenseType: currentExpenseType,
-          title: currentTitle,
-          remarks: currentRemarks,
-        )
-      : _pages[_selectedIndex],
-),
+          Expanded( child: widget.customPage ?? _pages[_selectedIndex],),
         ],
       ),
-
-      ///  ADD BUTTON HERE
-      // floatingActionButton: _buildFloatingButton(),
-      floatingActionButton: GlobalAddButton(
-  onTabChange: (index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  },
-
-  onExpenseSelect: (type, title, remarks) {
-    setState(() {
-      currentExpenseType = type;
-      currentTitle = title;
-      currentRemarks = remarks;
-    });
-  },
-),
-      
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
 
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
@@ -178,7 +216,10 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icon(Icons.dashboard),
             label: "Dashboard",
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.flag), label: "Target"),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.fingerprint),
+            label: "Attendance",
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.location_on),
             label: "Visit",
@@ -187,9 +228,13 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icon(Icons.shopping_cart),
             label: "Order",
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: "More"),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.more_horiz),
+            label: "More",
+          ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

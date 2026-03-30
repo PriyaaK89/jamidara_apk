@@ -9,4 +9,10 @@ class Endpoints {
   static const String getCustomers = '/getCustomers';
   static const String getCustomerById = '/get_customer_details';
   static const String uploadExpenses = '/upload-my-expense';
+  static const String getSalaryReport = '/my-daily-salary';
+  static const String getVisitReport = '/my-visits';
+  static const String getAttendanceReport = '/my-attendance';
+  static const String getStreetAddress = 'https://maps.googleapis.com/maps/api/geocode/json';
+
+
 }

@@ -6,6 +6,8 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'main_screen.dart';
 import 'package:another_flushbar/flushbar.dart';
 import '../services/storage_service.dart';
+import "../layout/app_router.dart";
+import '../routes/app_routes.dart';
 
 class LoginPage extends StatefulWidget {
   final String? message;
@@ -105,13 +107,23 @@ class _LoginPageState extends State<LoginPage> {
           value: _passwordController.text.trim(),
         );
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                MainScreen(employeeId: employeeId, token: token),
-          ),
-        );
+        // Navigator.pushAndRemoveUntil(
+        //   context,
+        //   MaterialPageRoute(
+        //     builder: (context) =>
+        //         MainScreen(employeeId: employeeId, token: token),
+        //   ),
+        //    (route) => false,
+        // );
+Navigator.pushNamedAndRemoveUntil(
+  context,
+  AppRoutes.appRouter,
+  (route) => false,
+  arguments: {
+    "employeeId": employeeId,
+    "token": token,
+  },
+);
         await StorageService.saveUser(token, employeeId);
         await Flushbar(
           message: "Login Successful",

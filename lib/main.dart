@@ -93,14 +93,20 @@ Future<void> sendLocation(ServiceInstance service) async {
       ),
     );
 
-    await ApiService.sendLocation(
-      employeeId: employeeId,
-      token: token,
-      latitude: position.latitude,
-      longitude: position.longitude,
-      accuracy: position.accuracy,
-      speed: position.speed,
-    );
+
+    final response = await ApiService.sendLocation(
+  employeeId: employeeId,
+  token: token,
+  latitude: position.latitude,
+  longitude: position.longitude,
+  accuracy: position.accuracy,
+  speed: position.speed,
+);
+
+    if (response != null && response['success'] == false) {
+  print("Stopping service: ${response['message']}");
+  service.invoke("stopService");
+}
   } catch (e, stack) {
     print("Location error: $e");
     print("Stack trace: $stack");
@@ -130,7 +136,7 @@ void onStart(ServiceInstance service) async {
 
   await sendLocation(service);
 
-  timer = Timer.periodic(const Duration(minutes: 1), (timer) async {
+  timer = Timer.periodic(const Duration(seconds: 15), (timer) async {
     await sendLocation(service);
   });
 }

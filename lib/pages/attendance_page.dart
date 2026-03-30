@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert'; 
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
@@ -74,14 +76,30 @@ class _AttendancePageState extends State<AttendancePage> {
   );
 }
 
+Future<String> getAddressFromGoogle(double lat, double lng) async {
+  final apiKey = "AIzaSyA723EQQd3NZG7QMvaE6yvS-gTAwdmeNis";
+
+  final url =
+      "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey";
+
+  final response = await http.get(Uri.parse(url));
+
+  print("Status Code: ${response.statusCode}");
+  print("Response Body: ${response.body}");
+
+  final data = jsonDecode(response.body);
+
+  if (response.statusCode == 200 &&
+      data['status'] == 'OK' &&
+      data['results'].isNotEmpty) {
+    return data['results'][0]['formatted_address'];
+  } else {
+    throw Exception("Google API failed: ${data['status']}");
+  }
+}
+
 Future<String> getFullLocationDetails() async {
-  //  Safe location fetch
   Position position = await getSafeCurrentLocation();
-
-  List<Placemark> placemarks =
-      await placemarkFromCoordinates(position.latitude, position.longitude);
-
-  Placemark place = placemarks.first;
 
   String formattedDate =
       DateFormat('dd-MM-yyyy').format(DateTime.now());
@@ -90,11 +108,31 @@ Future<String> getFullLocationDetails() async {
 
   String dateTimeLine = "Date: $formattedDate  Time: $formattedTime";
 
-  String addressLine =
-      "Street: ${place.street ?? ""}, "
-      "${place.locality ?? ""}, "
-      "${place.administrativeArea ?? ""}, "
-      "${place.country ?? ""}";
+  String addressLine = "";
+
+  try {
+    //  Try Google API first
+    addressLine = await getAddressFromGoogle(
+      position.latitude,
+      position.longitude,
+    );
+  } catch (e) {
+    print("Google API Error: $e");
+    //  Fallback to placemark
+    List<Placemark> placemarks =
+        await placemarkFromCoordinates(
+            position.latitude, position.longitude);
+
+    Placemark place = placemarks.first;
+
+    addressLine = [
+      place.subLocality,
+      place.locality,
+      place.administrativeArea,
+      place.postalCode,
+      place.country
+    ].where((e) => e != null && e.isNotEmpty).join(', ');
+  }
 
   String latLongLine =
       "Lat: ${position.latitude}, Long: ${position.longitude}";

@@ -140,7 +140,7 @@ class ApiService {
   }
 }
 
-static Future<void> sendLocation({
+static Future<Map<String, dynamic>?> sendLocation({
   required int employeeId,
   required String token,
   required double latitude,
@@ -163,7 +163,6 @@ static Future<void> sendLocation({
     print("==== SEND LOCATION API ====");
     print("URL: $url");
     print("Payload: ${jsonEncode(payload)}");
-    print("Token: $token");
 
     final response = await http.post(
       url,
@@ -171,16 +170,74 @@ static Future<void> sendLocation({
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode(payload),
+      body: jsonEncode(payload), //  FIXED
     );
 
     print("Response status: ${response.statusCode}");
     print("Response body: ${response.body}");
+
+    //  Handle response safely
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      return {
+        "success": false,
+        "message": "Server error: ${response.statusCode}"
+      };
+    }
+
   } catch (e, stack) {
     print("Send Location Error: $e");
     print("StackTrace: $stack");
+
+    return {
+      "success": false,
+      "message": "Exception occurred"
+    };
   }
 }
+
+// static Future<void> sendLocation({
+//   required int employeeId,
+//   required String token,
+//   required double latitude,
+//   required double longitude,
+//   required double accuracy,
+//   required double speed,
+// }) async {
+//   final url = Uri.parse('${Env.baseUrl}${Endpoints.saveLocation}');
+
+//   try {
+//     final payload = {
+//       'employee_id': employeeId,
+//       'latitude': latitude,
+//       'longitude': longitude,
+//       'accuracy': accuracy,
+//       'speed': speed,
+//       'timestamp': DateTime.now().toIso8601String(),
+//     };
+
+//     print("==== SEND LOCATION API ====");
+//     print("URL: $url");
+//     print("Payload: ${jsonEncode(payload)}");
+//     print("Token: $token");
+
+//     final response = await http.post(
+//       url,
+//       headers: {
+//         'Content-Type': 'application/json',
+//         'Authorization': 'Bearer $token',
+//       },
+//       body: jsonEncode(payload),
+//     );
+
+//     print("Response status: ${response.statusCode}");
+//     print("Response body: ${response.body}");
+//   } catch (e, stack) {
+//     print("Send Location Error: $e");
+//     print("StackTrace: $stack");
+//   }
+// }
 
 // Get District by Pincode
 static Future<Map<String, dynamic>?> getDistrictByPincode(String pincode) async {
@@ -281,6 +338,7 @@ static Future<Map<String, dynamic>?> getCustomerById(int id) async {
 static Future<Map<String, dynamic>> uploadVisit({
   required String visitType,
   required String customerType,
+   int? customerId,
   required String name,
   required String firm_name,
   required String firm_address,
@@ -305,8 +363,20 @@ static Future<Map<String, dynamic>> uploadVisit({
 
     request.fields['user_id'] = employeeId.toString();
     request.fields['visit_type'] = visitType.toLowerCase();
-    request.fields['customer_type'] =
-        customerType == "Old Customer" ? "existing" : "new";
+  
+     final isExisting = customerType == "Old Customer";
+
+//  Set customer type ONLY ONCE
+request.fields['customer_type'] = isExisting ? "old" : "new";
+
+//  Send customer_id only for old customer
+if (isExisting) {
+  if (customerId == null) {
+    throw Exception("Customer ID missing for old customer");
+  }
+
+  request.fields['customer_id'] = customerId.toString();
+}
     request.fields['name'] = name;
     request.fields['firm_name'] = firm_name;
     request.fields['firm_address'] = firm_address;
@@ -357,8 +427,6 @@ static Future<Map<String, dynamic>> uploadVisit({
   }
 }
 
-
-
 static Future<Map<String, dynamic>> uploadExpense({
   required String expenseType,
   required String expenseDate,
@@ -406,6 +474,141 @@ static Future<Map<String, dynamic>> uploadExpense({
     return {
       "success": false,
       "message": "Exception: $e"
+    };
+  }
+}
+
+static Future<Map<String, dynamic>> getMyVisits({
+  int page = 1,
+  int limit = 10,
+  String? visitType,
+  String? district,
+  String? fromDate,
+  String? toDate,
+  String? search,
+}) async {
+  final token = await StorageService.getToken();
+
+  final queryParams = {
+    "page": page.toString(),
+    "limit": limit.toString(),
+    if (visitType != null && visitType.isNotEmpty) "visit_type": visitType,
+    if (district != null && district.isNotEmpty) "district": district,
+    if (fromDate != null && fromDate.isNotEmpty) "from_date": fromDate,
+    if (toDate != null && toDate.isNotEmpty) "to_date": toDate,
+    if (search != null && search.isNotEmpty) "search": search,
+  };
+
+  final uri = Uri.parse('${Env.baseUrl}${Endpoints.getVisitReport}')
+      .replace(queryParameters: queryParams);
+
+  try {
+    final response = await http.get(
+      uri,
+      headers: {
+        "Authorization": "Bearer $token",
+        "Content-Type": "application/json",
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return data;
+    } else {
+      return {"success": false, "message": data["error"]};
+    }
+  } catch (e) {
+    return {"success": false, "message": e.toString()};
+  }
+}
+
+static Future<Map<String, dynamic>> getAttendanceReport({
+  required int page,
+  int limit = 10,
+  String? startDate,
+  String? endDate,
+}) async {
+  final token = await StorageService.getToken();
+
+  final queryParams = {
+    "page": page.toString(),
+    "limit": limit.toString(),
+    "start_date": startDate ?? "",
+    "end_date": endDate ?? "",
+  };
+
+  final uri = Uri.parse('${Env.baseUrl}${Endpoints.getAttendanceReport}')
+      .replace(queryParameters: queryParams);
+
+  try {
+    final response = await http.get(
+      uri,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return data;
+    } else {
+      return {
+        "success": false,
+        "message": data['message'] ?? "Failed to fetch attendance",
+      };
+    }
+  } catch (e) {
+    return {
+      "success": false,
+      "message": e.toString(),
+    };
+  }
+}
+
+static Future<Map<String, dynamic>> getSalaryReport({
+  int page = 1,
+  int limit = 10,
+  String? startDate,
+  String? endDate,
+}) async {
+  final token = await StorageService.getToken();
+
+  final queryParams = {
+    "page": page.toString(),
+    "limit": limit.toString(),
+    if (startDate != null && startDate.isNotEmpty) "startDate": startDate,
+    if (endDate != null && endDate.isNotEmpty) "endDate": endDate,
+  };
+
+  final uri = Uri.parse('${Env.baseUrl}${Endpoints.getSalaryReport}')
+      .replace(queryParameters: queryParams);
+
+  try {
+    final response = await http.get(
+      uri,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return data;
+    } else {
+      return {
+        "success": false,
+        "message": data["message"] ?? "Failed",
+      };
+    }
+  } catch (e) {
+    return {
+      "success": false,
+      "message": "Error: $e",
     };
   }
 }

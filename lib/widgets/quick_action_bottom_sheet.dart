@@ -107,27 +107,7 @@ QuickActionItem(
         Navigator.pop(context);
       },
     ),
-    QuickActionItem(
-      title: "Purchase",
-      icon: Icons.shopping_cart_checkout,
-      onTap: () {
-        Navigator.pop(context);
-      },
-    ),
-    QuickActionItem(
-      title: "Payment",
-      icon: Icons.payments,
-      onTap: () {
-        Navigator.pop(context);
-      },
-    ),
-    QuickActionItem(
-      title: "Debit Note",
-      icon: Icons.description_outlined,
-      onTap: () {
-        Navigator.pop(context);
-      },
-    ),
+   
     QuickActionItem(
       title: "Price List",
       icon: Icons.list_alt,

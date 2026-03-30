@@ -1,10 +1,18 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import '../services/api_service.dart';
 import 'package:another_flushbar/flushbar.dart';
+import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
+import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:path_provider/path_provider.dart';
 
 class VisitPage extends StatefulWidget {
   const VisitPage({super.key});
@@ -18,6 +26,7 @@ class _VisitPageState extends State<VisitPage> {
   int customerDropdownKey = 0;
   String? attendanceType; // Retailer / Distributor / Farmer
   String? customerType; // Old Customer / New Customer
+
   String? visitPurpose;
 
   final TextEditingController firmNameController = TextEditingController();
@@ -40,6 +49,7 @@ class _VisitPageState extends State<VisitPage> {
   List<Map<String, dynamic>> customerList = [];
   int? selectedCustomerId;
   bool isLoadingCustomers = false;
+
 
   @override
   void dispose() {
@@ -125,6 +135,144 @@ class _VisitPageState extends State<VisitPage> {
     });
   }
 
+Future<Position> _getLocation() async {
+  bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+  if (!serviceEnabled) {
+    await Geolocator.openLocationSettings();
+    throw Exception("Location disabled");
+  }
+
+  LocationPermission permission = await Geolocator.checkPermission();
+  if (permission == LocationPermission.denied) {
+    permission = await Geolocator.requestPermission();
+  }
+
+  return await Geolocator.getCurrentPosition(
+    desiredAccuracy: LocationAccuracy.high,
+  );
+}
+
+Future<String> _getAddress(double lat, double lng) async {
+  try {
+    final url =
+        "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=AIzaSyA723EQQd3NZG7QMvaE6yvS-gTAwdmeNis";
+
+    final res = await http.get(Uri.parse(url));
+    final data = jsonDecode(res.body);
+
+    if (data['status'] == 'OK') {
+      return data['results'][0]['formatted_address'];
+    }
+  } catch (e) {
+    print("Google API failed: $e");
+  }
+
+  // fallback
+  List<Placemark> placemarks =
+      await placemarkFromCoordinates(lat, lng);
+
+  final place = placemarks.first;
+
+  return [
+    place.subLocality,
+    place.locality,
+    place.administrativeArea,
+    place.postalCode,
+    place.country
+  ].where((e) => e != null && e.isNotEmpty).join(', ');
+}
+
+Future<File?> _stampImage(File file) async {
+  try {
+    //  Get location
+    final position = await _getLocation();
+
+    //  Get address
+    final address = await _getAddress(
+      position.latitude,
+      position.longitude,
+    );
+
+    //  Date & Time
+    String date =
+        DateFormat('dd-MM-yyyy').format(DateTime.now());
+    String time =
+        DateFormat('hh:mm a').format(DateTime.now());
+
+    //  Text lines
+    List<String> lines = [
+      "Date: $date  Time: $time",
+      address,
+      "Lat: ${position.latitude}, Lng: ${position.longitude}"
+    ];
+
+    //  Load image
+    final bytes = await file.readAsBytes();
+    img.Image? image = img.decodeImage(bytes);
+    if (image == null) return null;
+
+    
+
+         final logoBytes =
+      await rootBundle.load('assets/images/logo.png');
+  final logo =
+      img.decodeImage(logoBytes.buffer.asUint8List());
+
+    //  Draw background box
+    int padding = 20;
+    int boxHeight = (lines.length * 50) + 40;
+    int startY = image.height - boxHeight - 20;
+
+    img.fillRect(
+      image,
+      x1: 0,
+      y1: startY,
+      x2: image.width,
+      y2: image.height,
+      color: img.ColorRgba8(0, 0, 0, 180),
+    );
+
+    //  Draw text
+    final font = img.arial24;
+
+    for (int i = 0; i < lines.length; i++) {
+      img.drawString(
+        image,
+        lines[i],
+        font: font,
+        x: padding,
+        y: startY + 10 + (i * 40),
+        color: img.ColorRgb8(255, 255, 255),
+      );
+    }
+
+    //  Add logo (top-right)
+    if (logo != null) {
+      final resizedLogo =
+          img.copyResize(logo, width: image.width ~/ 4);
+
+      img.compositeImage(
+        image,
+        resizedLogo,
+        dstX: image.width - resizedLogo.width - 10,
+        dstY: 10,
+      );
+    }
+
+    //  Save image
+    final dir = await getApplicationDocumentsDirectory();
+    final newPath =
+        '${dir.path}/visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+    final newFile = File(newPath)
+      ..writeAsBytesSync(img.encodeJpg(image, quality: 90));
+
+    return newFile;
+  } catch (e) {
+    print("Stamp error: $e");
+    return null;
+  }
+}
 
   Future<void> _selectReminderDate() async {
     final DateTime? pickedDate = await showDatePicker(
@@ -148,25 +296,6 @@ class _VisitPageState extends State<VisitPage> {
     if (status.isGranted) return true;
 
     _showFlushbar("Camera permission denied");
-    return false;
-  }
-
-  Future<bool> _requestGalleryPermission() async {
-    PermissionStatus status;
-
-    if (Platform.isAndroid) {
-      status = await Permission.photos.request();
-
-      if (!status.isGranted && !status.isLimited) {
-        status = await Permission.storage.request();
-      }
-    } else {
-      status = await Permission.photos.request();
-    }
-
-    if (status.isGranted || status.isLimited) return true;
-
-    _showFlushbar("Gallery permission denied");
     return false;
   }
 
@@ -194,14 +323,7 @@ class _VisitPageState extends State<VisitPage> {
                     ),
                   ),
                 ),
-                // ListTile(
-                //   leading: const Icon(Icons.photo_library_outlined),
-                //   title: const Text("Choose from Gallery"),
-                //   onTap: () {
-                //     Navigator.pop(context);
-                //     _pickImageFromGallery();
-                //   },
-                // ),
+                
                 ListTile(
                   leading: const Icon(Icons.camera_front_outlined),
                   title: const Text("Take Photo"),
@@ -225,46 +347,32 @@ class _VisitPageState extends State<VisitPage> {
     );
   }
 
-  Future<void> _pickImageFromGallery() async {
-    final hasPermission = await _requestGalleryPermission();
-    if (!hasPermission) return;
-
-    try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 75,
-      );
-
-      if (pickedFile != null) {
-        setState(() {
-          _selectedImage = File(pickedFile.path);
-        });
-      }
-    } catch (e) {
-      _showFlushbar("Failed to pick image from gallery");
-    }
-  }
 
   Future<void> _pickImageFromCamera(CameraDevice cameraDevice) async {
-    final hasPermission = await _requestCameraPermission();
-    if (!hasPermission) return;
+  final hasPermission = await _requestCameraPermission();
+  if (!hasPermission) return;
 
-    try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: cameraDevice,
-        imageQuality: 75,
-      );
+  try {
+    final XFile? pickedFile = await _picker.pickImage(
+      source: ImageSource.camera,
+      preferredCameraDevice: cameraDevice,
+      imageQuality: 75,
+    );
 
-      if (pickedFile != null) {
-        setState(() {
-          _selectedImage = File(pickedFile.path);
-        });
-      }
-    } catch (e) {
-      _showFlushbar("Failed to capture image");
+    if (pickedFile != null) {
+      File original = File(pickedFile.path);
+
+      // Stamp image here
+      File? stamped = await _stampImage(original);
+
+      setState(() {
+        _selectedImage = stamped ?? original;
+      });
     }
+  } catch (e) {
+    _showFlushbar("Failed to capture image");
   }
+}
 
   void _removeSelectedImage() {
     setState(() {
@@ -421,11 +529,12 @@ Future<void> _submitForm() async {
   setState(() {
     isSubmitting = true;
   });
-
+print("customerId: $selectedCustomerId");
   try {
     final response = await ApiService.uploadVisit(
       visitType: attendanceType!,
       customerType: customerType!,
+      customerId: selectedCustomerId,
       name: nameController.text.trim(),
       firm_name: firmNameController.text.trim(),
       firm_address: firmAddressController.text.trim(),

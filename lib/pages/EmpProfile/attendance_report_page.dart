@@ -105,29 +105,32 @@ Future<void> fetchAttendance() async {
     }
   }
 
-  String formatDate(String? date) {
+String formatDate(String? date) {
   if (date == null) return "-";
 
-  final utcDate = DateTime.parse(date);
-  final localDate = utcDate.toLocal(); // converts to IST
+  final localDate = DateTime.parse(date); // no toLocal()
 
   return "${localDate.day.toString().padLeft(2, '0')}-"
          "${localDate.month.toString().padLeft(2, '0')}-"
          "${localDate.year}";
 }
 
-String formatTime(String? time) {
+String formatTime(String? time, BuildContext context) {
   if (time == null) return "-";
 
   try {
     final parts = time.split(":");
+
     int hour = int.parse(parts[0]);
     int minute = int.parse(parts[1]);
 
-    final dt = DateTime(0, 0, 0, hour, minute);
+    //  Add IST offset manually
+    final adjusted = DateTime(0, 1, 1, hour, minute)
+        .add(const Duration(hours: 5, minutes: 30));
 
-    return TimeOfDay.fromDateTime(dt).format(context);
+    return TimeOfDay.fromDateTime(adjusted).format(context);
   } catch (e) {
+    print("Time parse error: $e");
     return time;
   }
 }
@@ -200,8 +203,8 @@ String formatTime(String? time) {
                       item["attendance_date"]?.toString().substring(0, 10) ??
                           "-",
                     )),
-                    DataCell(Text(formatTime(item["check_in_time"]))),
-DataCell(Text(formatTime(item["check_out_time"]))),
+            DataCell(Text(formatTime(item["check_in_time"], context))),
+DataCell(Text(formatTime(item["check_out_time"], context))),
                     DataCell(Text(item["status"] ?? "-")),
                   ],
                 );

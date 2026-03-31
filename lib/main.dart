@@ -10,17 +10,25 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes/app_routes.dart';
 import 'services/api_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+await dotenv.load(fileName: ".env");
+
+final prefs = await SharedPreferences.getInstance();
+await prefs.setString('FLUTTER_BASE_URL', dotenv.env['FLUTTER_BASE_URL']!);
+
   if (await Permission.notification.isDenied) {
     await Permission.notification.request();
   }
+  
 
   await initializeService();
   runApp(const MyApp());
 }
+
 
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
@@ -118,6 +126,11 @@ Future<void> sendLocation(ServiceInstance service) async {
 void onStart(ServiceInstance service) async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
+
+  // await dotenv.load(fileName: ".env");
+//   if (!dotenv.isInitialized) {
+//   await dotenv.load(fileName: ".env");
+// }
 
   Timer? timer;
 

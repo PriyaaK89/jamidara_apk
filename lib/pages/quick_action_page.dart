@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import 'EmpProfile/distributor_onbording_page.dart';
 
 class QuickActionItem {
   final String title;
@@ -64,7 +65,18 @@ Widget build(BuildContext context) {
     QuickActionItem(title: "Receipt", icon: Icons.receipt, onTap: () {}),
     QuickActionItem(title: "Credit Note", icon: Icons.note_alt_outlined, onTap: () {}),
     QuickActionItem(title: "Price List", icon: Icons.list_alt, onTap: () {}),
-    QuickActionItem(title: "Distributor Onboarding", icon: Icons.list_alt, onTap: () {}),
+   QuickActionItem(
+  title: "Distributor Onboarding",
+  icon: Icons.person_add,
+ onTap: () {
+   Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (context) => const DistributorOnboardingPage(),
+  ),
+);
+  },
+),
   ];
 
   return Container(

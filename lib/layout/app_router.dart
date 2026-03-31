@@ -9,6 +9,7 @@ import "../pages/expense_page.dart";
 import '../pages/quick_action_page.dart';
 import '../pages/EmpProfile/attendance_report_page.dart';
 import '../pages/EmpProfile/salary_report_page.dart';
+import '../pages/EmpProfile/distributor_onbording_page.dart';
 
 class AppRouter extends StatefulWidget {
   final int employeeId;
@@ -79,16 +80,21 @@ class _AppRouterState extends State<AppRouter> {
         return const VisitReportPage();
 
       case "salary_report":
-  return const SalaryReportPage();
+        return const SalaryReportPage();
 
       case "order":
         return const OrderPage();
+
+      case "distributor_onboarding":
+        return const DistributorOnboardingPage();
 
       case "quick_actions":
         return QuickActionsPage(
           onTabChange: (index) {
             if (index == -1) {
               navigate("expense");
+            } else if (index == -2) {
+              navigate("distributor_onboarding");
             } else {
               onTabChange(index);
             }
@@ -103,19 +109,19 @@ class _AppRouterState extends State<AppRouter> {
         );
 
       case "expense":
-  return ExpensePage(
-    expenseType: currentExpenseType,
-    title: currentTitle,
-    remarks: currentRemarks,
-    onBackToQuickActions: () {
-      setState(() {
-        currentRoute = "quick_actions";
-        currentIndex = 4; //  VERY IMPORTANT
-      });
-    },
-  );
-  case "attendance_report":
-  return const AttendanceReportPage();
+        return ExpensePage(
+          expenseType: currentExpenseType,
+          title: currentTitle,
+          remarks: currentRemarks,
+          onBackToQuickActions: () {
+            setState(() {
+              currentRoute = "quick_actions";
+              currentIndex = 4; //  VERY IMPORTANT
+            });
+          },
+        );
+      case "attendance_report":
+        return const AttendanceReportPage();
 
       default:
         return DashboardPage(employeeId: widget.employeeId);
@@ -153,27 +159,27 @@ class _AppRouterState extends State<AppRouter> {
   }
 
   String getRouteFromIndex(int index) {
-  switch (index) {
-    case 0:
-      return "dashboard";
-    case 1:
-      return "attendance";
-    case 2:
-      return "visit";
-    case 3:
-      return "order";
-    case 4:
-      return "quick_actions";
-    default:
-      return "dashboard";
+    switch (index) {
+      case 0:
+        return "dashboard";
+      case 1:
+        return "attendance";
+      case 2:
+        return "visit";
+      case 3:
+        return "order";
+      case 4:
+        return "quick_actions";
+      default:
+        return "dashboard";
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
     return MainLayout(
       currentIndex: currentIndex,
-       currentRoute: currentRoute,
+      currentRoute: currentRoute,
       onTabChange: onTabChange,
       child: getCurrentPage(),
     );

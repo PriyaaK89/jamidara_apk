@@ -64,6 +64,7 @@ Widget build(BuildContext context) {
     QuickActionItem(title: "Receipt", icon: Icons.receipt, onTap: () {}),
     QuickActionItem(title: "Credit Note", icon: Icons.note_alt_outlined, onTap: () {}),
     QuickActionItem(title: "Price List", icon: Icons.list_alt, onTap: () {}),
+    QuickActionItem(title: "Distributor Onboarding", icon: Icons.list_alt, onTap: () {}),
   ];
 
   return Container(

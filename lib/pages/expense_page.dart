@@ -75,7 +75,6 @@ class _ExpensePageState extends State<ExpensePage> {
       ).show(context);
       return;
     }
-
     setState(() {
       isLoading = true;
     });
@@ -83,7 +82,6 @@ class _ExpensePageState extends State<ExpensePage> {
     try {
       String formattedDate =
           "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
-
       final result = await ApiService.uploadExpense(
         expenseType: widget.expenseType,
         expenseDate: formattedDate,
@@ -186,8 +184,7 @@ Widget build(BuildContext context) {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              //  buildHeader(),
-              //  KEEP YOUR HEADER (no change)
+            
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(

@@ -10,6 +10,7 @@ import '../pages/quick_action_page.dart';
 import '../pages/EmpProfile/attendance_report_page.dart';
 import '../pages/EmpProfile/salary_report_page.dart';
 import '../pages/EmpProfile/distributor_onbording_page.dart';
+import '../pages/profile_page.dart';
 
 class AppRouter extends StatefulWidget {
   final int employeeId;
@@ -50,9 +51,13 @@ class _AppRouterState extends State<AppRouter> {
       case "order":
         currentIndex = 3;
         break;
+       
       case "quick_actions":
         currentIndex = 4;
         break;
+         case "profile_page":
+      currentIndex = 4; 
+           break;
       default:
         currentIndex = 0;
     }
@@ -71,6 +76,11 @@ class _AppRouterState extends State<AppRouter> {
         return AttendancePage(
           employeeId: widget.employeeId,
           token: widget.token,
+        );
+
+        case "profile_page":
+        return const ProfilePage(
+
         );
 
       case "visit":
@@ -148,6 +158,8 @@ class _AppRouterState extends State<AppRouter> {
         case 4:
           currentRoute = "quick_actions"; // IMPORTANT
           break;
+          case 4:
+          currentRoute = "profile_page"; 
       }
     });
   }
@@ -170,6 +182,8 @@ class _AppRouterState extends State<AppRouter> {
         return "order";
       case 4:
         return "quick_actions";
+      case 5:
+        return "profile_page";
       default:
         return "dashboard";
     }

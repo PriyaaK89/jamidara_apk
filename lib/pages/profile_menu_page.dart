@@ -7,6 +7,8 @@ import '../pages/EmpProfile/visit_report_page.dart';
 import '../pages/main_screen.dart';
 import '../layout/app_router.dart';
 import '../pages/EmpProfile/attendance_report_page.dart';
+import '../pages/EmpProfile/salary_report_page.dart';
+import '../pages/profile_page.dart';
 
 class ProfileMenuPage extends StatelessWidget {
   final bool clearSavedCredentialsOnLogout;
@@ -182,7 +184,22 @@ class ProfileMenuPage extends StatelessWidget {
                       icon: Icons.person_outline,
                       title: 'My Profile',
                       subtitle: 'View employee profile details',
-                      onTap: () {},
+                      onTap: () async {
+                        Navigator.pop(context);
+                        // Navigate to profile detail page
+                        final token = await StorageService.getToken();
+                        final employeeId = await StorageService.getEmployeeId();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AppRouter(
+                              employeeId: employeeId!,
+                              token: token!,
+                              initialRoute: "profile_page",
+                            ), 
+                          ),
+                        );
+                      },
                     ),
                     _buildTile(
   context: context,

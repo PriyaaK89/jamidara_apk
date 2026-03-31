@@ -2,15 +2,19 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import '../utils/env.dart';
 import '../utils/endpoints.dart';
 import "../services/storage_service.dart";
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 class ApiService {
   // Login API
  static Future<Map<String, dynamic>> login(String email, String password) async {
-    final url = Uri.parse('${Env.baseUrl}${Endpoints.login}');
+  // final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+
+  final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+  final url = Uri.parse('$baseUrl${Endpoints.login}');
 
     try {
       final response = await http.post(
@@ -55,7 +59,12 @@ class ApiService {
   File? odometerImage,
   required int employeeId,
 }) async {
-  final url = Uri.parse('${Env.baseUrl}${Endpoints.markAttendance}');
+
+    final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    // final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+  final url = Uri.parse('$baseUrl${Endpoints.markAttendance}');
+  // final url = Uri.parse('${Env.baseUrl}${Endpoints.markAttendance}');
   final request = http.MultipartRequest('POST', url);
 
   request.headers['Authorization'] = 'Bearer $token';
@@ -148,7 +157,11 @@ static Future<Map<String, dynamic>?> sendLocation({
   required double accuracy,
   required double speed,
 }) async {
-  final url = Uri.parse('${Env.baseUrl}${Endpoints.saveLocation}');
+    final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    // final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+  final url = Uri.parse('$baseUrl${Endpoints.saveLocation}');
+  // final url = Uri.parse('${Env.baseUrl}${Endpoints.saveLocation}');
 
   try {
     final payload = {
@@ -241,7 +254,12 @@ static Future<Map<String, dynamic>?> sendLocation({
 
 // Get District by Pincode
 static Future<Map<String, dynamic>?> getDistrictByPincode(String pincode) async {
-  final url = Uri.parse('${Env.baseUrl}${Endpoints.getDistrict}/$pincode');
+
+    final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    // final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+  final url = Uri.parse('$baseUrl${Endpoints.getDistrict}/$pincode');
+  // final url = Uri.parse('${Env.baseUrl}${Endpoints.getDistrict}/$pincode');
 
   try {
     final response = await http.get(url);
@@ -257,7 +275,13 @@ static Future<Map<String, dynamic>?> getDistrictByPincode(String pincode) async 
 
 // Get Areas by Pincode
 static Future<List<String>> getAreasByPincode(String pincode) async {
-  final url = Uri.parse('${Env.baseUrl}${Endpoints.getArea}?pincode=$pincode');
+
+    final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+  // final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+  final url = Uri.parse('$baseUrl${Endpoints.getArea}?pincode=$pincode');
+  // final url = Uri.parse('${Env.baseUrl}${Endpoints.getArea}?pincode=$pincode');
+  
 
   try {
     final response = await http.get(url);
@@ -279,7 +303,12 @@ static Future<List<String>> getAreasByPincode(String pincode) async {
 static Future<List<Map<String, dynamic>>> getCustomers(String type) async {
   final token = await StorageService.getToken();
 
-  final url = Uri.parse('${Env.baseUrl}${Endpoints.getCustomers}?type=$type');
+  // final url = Uri.parse('${Env.baseUrl}${Endpoints.getCustomers}?type=$type');
+
+    final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+  //  final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+  final url = Uri.parse('$baseUrl${Endpoints.getCustomers}?type=$type');
 
   try {
     final response = await http.get(
@@ -310,7 +339,12 @@ static Future<List<Map<String, dynamic>>> getCustomers(String type) async {
 // Get Customer Details
 static Future<Map<String, dynamic>?> getCustomerById(int id) async {
   final token = await StorageService.getToken();
-  final url = Uri.parse('${Env.baseUrl}${Endpoints.getCustomerById}/$id');
+  // final url = Uri.parse('${Env.baseUrl}${Endpoints.getCustomerById}/$id');
+
+    final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    //  final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+  final url = Uri.parse('$baseUrl${Endpoints.getCustomerById}/$id');
 
   try {
     final response = await http.get(
@@ -347,7 +381,7 @@ static Future<Map<String, dynamic>> uploadVisit({
   required String district,
   required String visitPurpose,
   required String comment,
-  required String reminderDate,
+  String? reminderDate,
   required String pincode,
   required String area,
   File? image,
@@ -356,7 +390,13 @@ static Future<Map<String, dynamic>> uploadVisit({
     final token = await StorageService.getToken();
     final employeeId = await StorageService.getEmployeeId();
 
-    final url = Uri.parse('${Env.baseUrl}${Endpoints.uploadEmpVisit}');
+    // final url = Uri.parse('${Env.baseUrl}${Endpoints.uploadEmpVisit}');
+
+      final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+    // final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+    final url = Uri.parse('$baseUrl${Endpoints.uploadEmpVisit}');
     final request = http.MultipartRequest('POST', url);
 
     request.headers['Authorization'] = 'Bearer $token';
@@ -385,7 +425,10 @@ if (isExisting) {
     request.fields['district'] = district;
     request.fields['visit_purpose'] = visitPurpose;
     request.fields['comment'] = comment;
-    request.fields['reminder_date'] = reminderDate;
+    // request.fields['reminder_date'] = reminderDate;
+    if (reminderDate != null && reminderDate.trim().isNotEmpty) {
+  request.fields['reminder_date'] = reminderDate;
+}
     request.fields['pincode'] = pincode;
     request.fields['area'] = area;
 
@@ -437,10 +480,17 @@ static Future<Map<String, dynamic>> uploadExpense({
   try {
     final token = await StorageService.getToken();
 
-    var request = http.MultipartRequest(
-      'POST',
-      Uri.parse('${Env.baseUrl}/upload-my-expense'),
-    );
+      final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+// final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+    final url = Uri.parse('$baseUrl${Endpoints.uploadExpenses}');
+      final request = http.MultipartRequest('POST', url);
+
+    // var request = http.MultipartRequest(
+    //   'POST',
+    //   Uri.parse('${Env.baseUrl}/upload-my-expense'),
+      
+    // );
 
     request.headers['Authorization'] = 'Bearer $token';
 
@@ -499,8 +549,15 @@ static Future<Map<String, dynamic>> getMyVisits({
     if (search != null && search.isNotEmpty) "search": search,
   };
 
-  final uri = Uri.parse('${Env.baseUrl}${Endpoints.getVisitReport}')
-      .replace(queryParameters: queryParams);
+    final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+  // final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+    final uri = Uri.parse('$baseUrl${Endpoints.getVisitReport}')
+    .replace(queryParameters: queryParams);
+
+  // final uri = Uri.parse('${Env.baseUrl}${Endpoints.getVisitReport}')
+  //     .replace(queryParameters: queryParams);
 
   try {
     final response = await http.get(
@@ -538,8 +595,14 @@ static Future<Map<String, dynamic>> getAttendanceReport({
     "end_date": endDate ?? "",
   };
 
-  final uri = Uri.parse('${Env.baseUrl}${Endpoints.getAttendanceReport}')
-      .replace(queryParameters: queryParams);
+    final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+// final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+    final uri = Uri.parse('$baseUrl${Endpoints.getAttendanceReport}')
+    .replace(queryParameters: queryParams);
+  // final uri = Uri.parse('${Env.baseUrl}${Endpoints.getAttendanceReport}')
+  //     .replace(queryParameters: queryParams);
 
   try {
     final response = await http.get(
@@ -583,8 +646,13 @@ static Future<Map<String, dynamic>> getSalaryReport({
     if (endDate != null && endDate.isNotEmpty) "endDate": endDate,
   };
 
-  final uri = Uri.parse('${Env.baseUrl}${Endpoints.getSalaryReport}')
-      .replace(queryParameters: queryParams);
+  final prefs = await SharedPreferences.getInstance();
+final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+// final baseUrl = dotenv.env['FLUTTER_BASE_URL']!;
+    final uri = Uri.parse('$baseUrl${Endpoints.getSalaryReport}')
+    .replace(queryParameters: queryParams);
+  // final uri = Uri.parse('${Env.baseUrl}${Endpoints.getSalaryReport}')
+  //     .replace(queryParameters: queryParams);
 
   try {
     final response = await http.get(

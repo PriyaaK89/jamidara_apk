@@ -13,6 +13,7 @@ import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class VisitPage extends StatefulWidget {
   const VisitPage({super.key});
@@ -154,32 +155,47 @@ Future<Position> _getLocation() async {
 
 Future<String> _getAddress(double lat, double lng) async {
   try {
+    final apiKey = dotenv.env['GOOGLE_API_KEY'] ?? '';
+
+    if (apiKey.isEmpty) {
+      throw Exception("Google API key missing in .env");
+    }
+
     final url =
-        "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=AIzaSyA723EQQd3NZG7QMvaE6yvS-gTAwdmeNis";
+        "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey";
 
     final res = await http.get(Uri.parse(url));
     final data = jsonDecode(res.body);
 
-    if (data['status'] == 'OK') {
+    if (res.statusCode == 200 &&
+        data['status'] == 'OK' &&
+        data['results'] != null &&
+        data['results'].isNotEmpty) {
       return data['results'][0]['formatted_address'];
+    } else {
+      throw Exception("Google API failed: ${data['status']}");
     }
   } catch (e) {
     print("Google API failed: $e");
   }
 
-  // fallback
-  List<Placemark> placemarks =
-      await placemarkFromCoordinates(lat, lng);
+  //  fallback (offline-safe)
+  try {
+    List<Placemark> placemarks =
+        await placemarkFromCoordinates(lat, lng);
 
-  final place = placemarks.first;
+    final place = placemarks.first;
 
-  return [
-    place.subLocality,
-    place.locality,
-    place.administrativeArea,
-    place.postalCode,
-    place.country
-  ].where((e) => e != null && e.isNotEmpty).join(', ');
+    return [
+      place.subLocality,
+      place.locality,
+      place.administrativeArea,
+      place.postalCode,
+      place.country
+    ].where((e) => e != null && e.isNotEmpty).join(', ');
+  } catch (e) {
+    return "Location unavailable";
+  }
 }
 
 Future<File?> _stampImage(File file) async {
@@ -543,7 +559,10 @@ print("customerId: $selectedCustomerId");
       district: districtController.text.trim(),
       visitPurpose: visitPurpose!,
       comment: commentController.text.trim(),
-      reminderDate: reminderDateController.text.trim(),
+      // reminderDate: reminderDateController.text.trim(),
+      reminderDate: reminderDateController.text.trim().isEmpty
+    ? null
+    : reminderDateController.text.trim(),
       pincode: pincodeController.text.trim(),
       area: selectedArea ?? '',
       image: _selectedImage,

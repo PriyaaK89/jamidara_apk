@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:another_flushbar/flushbar.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AttendancePage extends StatefulWidget {
   final int employeeId;
@@ -77,15 +78,12 @@ class _AttendancePageState extends State<AttendancePage> {
 }
 
 Future<String> getAddressFromGoogle(double lat, double lng) async {
-  final apiKey = "AIzaSyA723EQQd3NZG7QMvaE6yvS-gTAwdmeNis";
+  final apiKey = dotenv.env['GOOGLE_API_KEY'] ?? '';
 
   final url =
       "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey";
 
   final response = await http.get(Uri.parse(url));
-
-  print("Status Code: ${response.statusCode}");
-  print("Response Body: ${response.body}");
 
   final data = jsonDecode(response.body);
 

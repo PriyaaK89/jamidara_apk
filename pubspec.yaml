@@ -49,6 +49,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   another_flushbar: ^1.12.30
   dropdown_search: ^5.0.6
+  flutter_dotenv: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -77,6 +78,7 @@ flutter:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
   assets:
+    - .env
     - assets/images/logo.png
     - assets/images/jsc_logo.png
     - assets/images/jamidara_logo.png

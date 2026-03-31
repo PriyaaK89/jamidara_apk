@@ -3,6 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import 'package:another_flushbar/flushbar.dart';
+import 'package:geocoding/geocoding.dart';
+import 'dart:convert';
+import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
+import 'package:image/image.dart' as img;
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 
 class ExpensePage extends StatefulWidget {
   final String expenseType;
@@ -31,18 +41,215 @@ class _ExpensePageState extends State<ExpensePage> {
 
   final picker = ImagePicker();
 
+  // Future<void> _pickImageFromCamera() async {
+  //   final pickedFile = await picker.pickImage(
+  //     source: ImageSource.camera,
+  //     imageQuality: 70,
+  //   );
+
+  //   if (pickedFile != null) {
+  //     setState(() {
+  //       selectedImage = File(pickedFile.path);
+  //     });
+  //   }
+  // }
+
+  Future<Position> _getLocation() async {
+  bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+  if (!serviceEnabled) {
+    await Geolocator.openLocationSettings();
+    throw Exception("Location disabled");
+  }
+
+  LocationPermission permission = await Geolocator.checkPermission();
+
+  if (permission == LocationPermission.denied) {
+    permission = await Geolocator.requestPermission();
+  }
+
+  if (permission == LocationPermission.deniedForever) {
+    throw Exception("Location permanently denied");
+  }
+
+  return await Geolocator.getCurrentPosition(
+    desiredAccuracy: LocationAccuracy.high,
+  );
+}
+
+Future<String> _getAddress(double lat, double lng) async {
+  try {
+    final apiKey = dotenv.env['GOOGLE_API_KEY'] ?? '';
+
+    if (apiKey.isEmpty) {
+      throw Exception("Google API key missing in .env");
+    }
+
+    final url =
+        "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey";
+
+    final res = await http.get(Uri.parse(url));
+    final data = jsonDecode(res.body);
+
+    if (res.statusCode == 200 &&
+        data['status'] == 'OK' &&
+        data['results'] != null &&
+        data['results'].isNotEmpty) {
+      return data['results'][0]['formatted_address'];
+    } else {
+      throw Exception("Google API failed: ${data['status']}");
+    }
+  } catch (e) {
+    print("Google API failed: $e");
+  }
+
+  //  fallback (offline-safe)
+  try {
+    List<Placemark> placemarks =
+        await placemarkFromCoordinates(lat, lng);
+
+    final place = placemarks.first;
+
+    return [
+      place.subLocality,
+      place.locality,
+      place.administrativeArea,
+      place.postalCode,
+      place.country
+    ].where((e) => e != null && e.isNotEmpty).join(', ');
+  } catch (e) {
+    return "Location unavailable";
+  }
+}
+
+Future<File?> _stampImage(File file) async {
+  try {
+    //  Get location
+    final position = await _getLocation();
+
+    //  Get address
+    final address = await _getAddress(
+      position.latitude,
+      position.longitude,
+    );
+
+    //  Date & Time
+    String date =
+        DateFormat('dd-MM-yyyy').format(DateTime.now());
+    String time =
+        DateFormat('hh:mm a').format(DateTime.now());
+
+    //  Text lines
+    List<String> lines = [
+      "Date: $date  Time: $time",
+      address,
+      "Lat: ${position.latitude}, Lng: ${position.longitude}"
+    ];
+
+    //  Load image
+    final bytes = await file.readAsBytes();
+    img.Image? image = img.decodeImage(bytes);
+    if (image == null) return null;
+
+    
+
+         final logoBytes =
+      await rootBundle.load('assets/images/logo.png');
+  final logo =
+      img.decodeImage(logoBytes.buffer.asUint8List());
+
+    //  Draw background box
+    int padding = 20;
+    int boxHeight = (lines.length * 50) + 40;
+    int startY = image.height - boxHeight - 20;
+
+    img.fillRect(
+      image,
+      x1: 0,
+      y1: startY,
+      x2: image.width,
+      y2: image.height,
+      color: img.ColorRgba8(0, 0, 0, 180),
+    );
+
+    //  Draw text
+    final font = img.arial24;
+
+    for (int i = 0; i < lines.length; i++) {
+      img.drawString(
+        image,
+        lines[i],
+        font: font,
+        x: padding,
+        y: startY + 10 + (i * 40),
+        color: img.ColorRgb8(255, 255, 255),
+      );
+    }
+
+    //  Add logo (top-right)
+    if (logo != null) {
+      final resizedLogo =
+          img.copyResize(logo, width: image.width ~/ 4);
+
+      img.compositeImage(
+        image,
+        resizedLogo,
+        dstX: image.width - resizedLogo.width - 10,
+        dstY: 10,
+      );
+    }
+
+    //  Save image
+    final dir = await getApplicationDocumentsDirectory();
+    final newPath =
+        '${dir.path}/visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+    final newFile = File(newPath)
+      ..writeAsBytesSync(img.encodeJpg(image, quality: 90));
+
+    return newFile;
+  } catch (e) {
+    print("Stamp error: $e");
+    return null;
+  }
+}
+
   Future<void> _pickImageFromCamera() async {
+  final status = await Permission.camera.request();
+  if (!status.isGranted) {
+    Flushbar(
+      message: "Camera permission denied",
+      duration: const Duration(seconds: 2),
+    ).show(context);
+    return;
+  }
+
+  try {
     final pickedFile = await picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 70,
+      imageQuality: 75,
     );
 
     if (pickedFile != null) {
+      File original = File(pickedFile.path);
+
+      setState(() => isLoading = true); //  START LOADER
+
+      File? stampedImage = await _stampImage(original);
+
       setState(() {
-        selectedImage = File(pickedFile.path);
+        selectedImage = stampedImage ?? original;
+        isLoading = false; //  STOP LOADER
       });
     }
+  } catch (e) {
+    setState(() => isLoading = false);
+
+    Flushbar(
+      message: "Failed to capture image",
+      duration: const Duration(seconds: 2),
+    ).show(context);
   }
+}
 
   Future<void> _pickDate() async {
     DateTime? picked = await showDatePicker(

@@ -7,6 +7,8 @@ import '../pages/EmpProfile/visit_report_page.dart';
 import '../pages/main_screen.dart';
 import '../layout/app_router.dart';
 import '../pages/EmpProfile/attendance_report_page.dart';
+import '../pages/EmpProfile/salary_report_page.dart';
+import '../pages/profile_page.dart';
 
 class ProfileMenuPage extends StatelessWidget {
   final bool clearSavedCredentialsOnLogout;
@@ -182,31 +184,46 @@ class ProfileMenuPage extends StatelessWidget {
                       icon: Icons.person_outline,
                       title: 'My Profile',
                       subtitle: 'View employee profile details',
-                      onTap: () {},
+                      onTap: () async {
+                        Navigator.pop(context);
+                        // Navigate to profile detail page
+                        final token = await StorageService.getToken();
+                        final employeeId = await StorageService.getEmployeeId();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AppRouter(
+                              employeeId: employeeId!,
+                              token: token!,
+                              initialRoute: "profile_page",
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _buildTile(
-  context: context,
-  icon: Icons.fingerprint,
-  title: 'My Attendance',
-  subtitle: 'Check attendance status and records',
- onTap: () async {
-  Navigator.pop(context);
+                      context: context,
+                      icon: Icons.fingerprint,
+                      title: 'My Attendance',
+                      subtitle: 'Check attendance status and records',
+                      onTap: () async {
+                        Navigator.pop(context);
 
-  final token = await StorageService.getToken();
-  final employeeId = await StorageService.getEmployeeId();
+                        final token = await StorageService.getToken();
+                        final employeeId = await StorageService.getEmployeeId();
 
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => AppRouter(
-        employeeId: employeeId!,
-        token: token!,
-        initialRoute: "attendance_report",
-      ),
-    ),
-  );
-},
-),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AppRouter(
+                              employeeId: employeeId!,
+                              token: token!,
+                              initialRoute: "attendance_report",
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                     _buildTile(
                       context: context,
                       icon: Icons.location_on_outlined,
@@ -224,7 +241,8 @@ class ProfileMenuPage extends StatelessWidget {
                             builder: (_) => AppRouter(
                               employeeId: employeeId!,
                               token: token!,
-                              initialRoute: "visit_report", ),
+                              initialRoute: "visit_report",
+                            ),
                           ),
                         );
                       },
@@ -245,28 +263,28 @@ class ProfileMenuPage extends StatelessWidget {
                       onTap: () {},
                     ),
                     _buildTile(
-  context: context,
-  icon: Icons.monetization_on,
-  title: 'My Salary Report',
-  subtitle: 'View you daily salary',
-  onTap: () async {
-    Navigator.pop(context);
+                      context: context,
+                      icon: Icons.monetization_on,
+                      title: 'My Salary Report',
+                      subtitle: 'View you daily salary',
+                      onTap: () async {
+                        Navigator.pop(context);
 
-    final token = await StorageService.getToken();
-    final employeeId = await StorageService.getEmployeeId();
+                        final token = await StorageService.getToken();
+                        final employeeId = await StorageService.getEmployeeId();
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AppRouter(
-          employeeId: employeeId!,
-          token: token!,
-          initialRoute: "salary_report", //  IMPORTANT
-        ),
-      ),
-    );
-  },
-),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AppRouter(
+                              employeeId: employeeId!,
+                              token: token!,
+                              initialRoute: "salary_report", //  IMPORTANT
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                     _buildTile(
                       context: context,
                       icon: Icons.support_agent,

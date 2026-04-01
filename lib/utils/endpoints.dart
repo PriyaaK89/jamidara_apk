@@ -12,6 +12,7 @@ class Endpoints {
   static const String getSalaryReport = '/my-daily-salary';
   static const String getVisitReport = '/my-visits';
   static const String getAttendanceReport = '/my-attendance';
+  static const String getProfile = '/auth/get-employee-details';
   static const String getStreetAddress = 'https://maps.googleapis.com/maps/api/geocode/json';
 
 

@@ -821,9 +821,9 @@ print("customerId: $selectedCustomerId");
               //   ),
               // ),
 
-              // Attendance Type
+              // Visit Type
               _sectionCard(
-                title: "Attendance Type",
+                title: "Visit Type",
                 child: Row(
                   children: [
                     _radioOption(

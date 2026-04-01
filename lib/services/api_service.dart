@@ -299,6 +299,34 @@ final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
   return [];
 }
 
+// get emp details by id api 
+
+static Future<Map<String, dynamic>?> getProfile() async {
+  final token = await StorageService.getToken();
+
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+  final url = Uri.parse('$baseUrl${Endpoints.getProfile}/${await StorageService.getEmployeeId()}');
+
+
+  final response = await http.get(
+    url,
+    headers: {
+      "Authorization": "Bearer $token",
+      "Content-Type": "application/json",
+    },
+  );
+
+  if (response.statusCode == 200) {
+    return jsonDecode(response.body);
+  }
+  print("📡 STATUS CODE: ${response.statusCode}");
+  print("📦 BODY: ${response.body}");
+
+  return null;
+}
+
 // Get Customers
 static Future<List<Map<String, dynamic>>> getCustomers(String type) async {
   final token = await StorageService.getToken();
@@ -354,10 +382,6 @@ final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
         'Content-Type': 'application/json',
       },
     );
-
-    print("GET CUSTOMER DETAILS URL: $url");
-    print("GET CUSTOMER DETAILS STATUS: ${response.statusCode}");
-    print("GET CUSTOMER DETAILS BODY: ${response.body}");
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);

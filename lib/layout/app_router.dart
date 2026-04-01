@@ -160,6 +160,9 @@ class _AppRouterState extends State<AppRouter> {
           break;
           case 4:
           currentRoute = "profile_page"; 
+          break;
+        default:
+          currentRoute = "dashboard";
       }
     });
   }

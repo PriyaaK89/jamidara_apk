@@ -14,6 +14,6 @@ class Endpoints {
   static const String getAttendanceReport = '/my-attendance';
   static const String getProfile = '/auth/get-employee-details';
   static const String getStreetAddress = 'https://maps.googleapis.com/maps/api/geocode/json';
-
+  static const String createOnBoardingOfDistributor = '/create-distributor';
 
 }

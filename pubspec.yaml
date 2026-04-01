@@ -50,6 +50,7 @@ dependencies:
   another_flushbar: ^1.12.30
   dropdown_search: ^5.0.6
   flutter_dotenv: ^5.1.0
+  screen_protector: ^1.2.0
 
 dev_dependencies:
   flutter_test:

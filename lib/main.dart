@@ -7,15 +7,16 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
-
 import 'routes/app_routes.dart';
 import 'services/api_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:screen_protector/screen_protector.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
 await dotenv.load(fileName: ".env");
+await ScreenProtector.preventScreenshotOn();
 
 final prefs = await SharedPreferences.getInstance();
 await prefs.setString('FLUTTER_BASE_URL', dotenv.env['FLUTTER_BASE_URL']!);
@@ -149,7 +150,7 @@ void onStart(ServiceInstance service) async {
 
   await sendLocation(service);
 
-  timer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+  timer = Timer.periodic(const Duration(minutes: 1), (timer) async {
     await sendLocation(service);
   });
 }

@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../layout/main_layout.dart';
+import '../../services/api_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DistributorOnboardingPage extends StatefulWidget {
   const DistributorOnboardingPage({super.key});
@@ -16,6 +19,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
   final customerName = TextEditingController();
   final gstController = TextEditingController();
   final firmName = TextEditingController();
+  final customerDOB = TextEditingController();
   // bussiness add ress
   final businessAddress = TextEditingController();
   final bussinessterritory = TextEditingController();
@@ -118,6 +122,95 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
     );
   }
 
+  Future<void> submitDistributor() async {
+  if (!_formKey.currentState!.validate()) return;
+
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('token') ?? '';
+
+  List<Map<String, dynamic>> partnerList = [];
+  for (var p in partners) {
+    partnerList.add({
+      "name": p["name"]!.text,
+      "mobile_no": p["mobile"]!.text,
+      "father_name": "",
+      "address": "",
+    });
+  }
+
+  if (firmType == "Partnership" && partnerList.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Add at least one partner")),
+    );
+    return;
+  }
+
+  List<Map<String, dynamic>> companyList = [];
+  for (var c in companies) {
+    companyList.add({
+      "company_name": c["name"]!.text,
+      "turnover": c["turnover"]!.text,
+    });
+  }
+
+  final data = {
+    "customer_name": customerName.text,
+    "customer_dob": customerDOB.text,
+    "firm_name": firmName.text,
+    "gst_number": gstController.text,
+    "gst_type": gstType.toLowerCase(),
+    "firm_type": firmType.toLowerCase(),
+    "business_address": businessAddress.text,
+    "state": bussinesstate.text,
+    "district": bussinessdistrict.text,
+    "tehsil": bussinesstehsil.text,
+    "pincode": bussinesspincode.text,
+    "contact_number": bussinesscontact.text,
+    "alt_contact_number": bussinessaltcontact.text,
+    "source_of_funds": sourceOfFunds,
+    "bank_name": firmbankName.text,
+    "bank_account_no": firmbankAccountNumber.text,
+    "ifsc_code": firmbankIfsc.text,
+    "approver_name": "Admin",
+    "approving_date": DateTime.now().toString().split(" ")[0],
+  };
+
+  Map<String, File?> files = {
+     "shop_image": null,
+      "cheque_photo": null,
+      "pan_photo": null,
+      "aadhar_photo": null,
+      "gst_file": null,
+      "seed_license": null,
+      "fertilizer_license": null,
+      "pesticide_license": null,
+      "bank_diary": null,
+      "letter_head": null,
+      "authority_letter": null,
+      "partnership_deed": null,
+  }; // add later when using image picker
+
+  final response = await ApiService.createDistributor(
+    token: token,
+    data: data,
+    partners: partnerList,
+    companies: companyList,
+    files: files,
+  );
+
+  if (response["success"] == true) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Distributor Created Successfully")),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(response["message"].toString())),
+    );
+  }
+}
+
+
+
   /// ADD PARTNER
   void addPartner() {
     setState(() {
@@ -149,6 +242,21 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
     setState(() {
       companies.removeAt(index);
     });
+  }
+
+  Future<void> _pickDate() async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(1950),
+      lastDate: DateTime.now(),
+    );
+
+    if (picked != null) {
+      setState(() {
+        customerDOB.text = picked.toString().split(" ")[0];
+      });
+    }
   }
 
   @override
@@ -224,6 +332,31 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     const SizedBox(height: 12),
 
+                    InkWell(
+                      onTap: _pickDate,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              customerDOB.text.isEmpty
+                                  ? "Select Date"
+                                  : customerDOB.text,
+                            ),
+                            const Icon(Icons.calendar_today, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
                     /// FIRM NAME
                     TextFormField(
                       controller: firmName,
@@ -232,14 +365,32 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     const SizedBox(height: 12),
 
+                    DropdownButtonFormField(
+                      value: gstType.isEmpty ? null : gstType,
+                      items:
+                          ["regular", "composition", "consumer", "unregistered"]
+                              .map(
+                                (e) =>
+                                    DropdownMenuItem(value: e, child: Text(e)),
+                              )
+                              .toList(),
+                      onChanged: (val) {
+                        setState(() => gstType = val.toString());
+                      },
+                      decoration: input("GST Type"),
+                    ),
+                    const SizedBox(height: 12),
+
                     /// FIRM TYPE
                     DropdownButtonFormField(
                       value: firmType.isEmpty ? null : firmType,
-                      items: ["proprietorship", "partnership"]
-                          .map(
-                            (e) => DropdownMenuItem(value: e, child: Text(e)),
-                          )
-                          .toList(),
+                      items:
+                          ["proprietorship", "partnership", "private_limited"]
+                              .map(
+                                (e) =>
+                                    DropdownMenuItem(value: e, child: Text(e)),
+                              )
+                              .toList(),
                       onChanged: (val) {
                         setState(() => firmType = val.toString());
                       },
@@ -252,6 +403,20 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     TextFormField(
                       controller: businessAddress,
                       decoration: input("Business Address"),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+  controller: bussinesscontact,
+  decoration: input("Contact Number"),
+  keyboardType: TextInputType.phone,
+),
+const SizedBox(height: 12),
+
+                    TextFormField(
+                      controller: bussinesstehsil,
+                      decoration: input("Tehsil"),
                     ),
 
                     const SizedBox(height: 12),
@@ -282,10 +447,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     ///  PARTNERS SECTION
                     if (firmType == "partnership") ...[
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                     
-                      ),
+                      const Align(alignment: Alignment.centerLeft),
 
                       const SizedBox(height: 10),
 
@@ -308,7 +470,6 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                            
                               Text(
                                 "Partner ${i + 1}",
                                 style: const TextStyle(
@@ -316,18 +477,17 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                                   fontSize: 14,
                                 ),
                               ),
-                                IconButton(
-                                    icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.red,
-                                    ),
-                                    onPressed: () {
-                                      if (partners.length > 1) {
-                                        removePartner(i);
-                                      }
-                                    },
-                                  ),
-                                
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () {
+                                  if (partners.length > 1) {
+                                    removePartner(i);
+                                  }
+                                },
+                              ),
 
                               const SizedBox(height: 10),
                               Row(
@@ -341,8 +501,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                                   const SizedBox(width: 8),
 
-                                  /// ❌ DELETE BUTTON
-                                
+                                  ///  DELETE BUTTON
                                 ],
                               ),
 
@@ -440,6 +599,21 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     const SizedBox(height: 20),
 
+                    TextFormField(
+  controller: firmbankName,
+  decoration: input("Bank Name"),
+),
+ const SizedBox(height: 20),
+ TextFormField(
+  controller: firmbankAccountNumber,
+  decoration: input("Account Number"),
+  keyboardType: TextInputType.number,
+),
+TextFormField(
+  controller: firmbankIfsc,
+  decoration: input("IFSC Code"),
+),
+
                     ///  SOURCE OF FUNDS
                     DropdownButtonFormField(
                       value: sourceOfFunds.isEmpty ? null : sourceOfFunds,
@@ -458,13 +632,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     ///  SUBMIT BUTTON
                     InkWell(
-                      onTap: () {
-                        if (_formKey.currentState!.validate()) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Submitted")),
-                          );
-                        }
-                      },
+                      onTap: submitDistributor,
                       child: Container(
                         height: 50,
                         width: double.infinity,

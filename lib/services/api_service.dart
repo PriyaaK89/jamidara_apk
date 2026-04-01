@@ -5,6 +5,7 @@ import 'package:http_parser/http_parser.dart';
 import '../utils/endpoints.dart';
 import "../services/storage_service.dart";
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 
 
 class ApiService {
@@ -15,6 +16,8 @@ class ApiService {
   final prefs = await SharedPreferences.getInstance();
 final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
   final url = Uri.parse('$baseUrl${Endpoints.login}');
+  debugPrint("LOGIN BASE URL: $baseUrl");
+debugPrint("LOGIN FULL URL: $url");
 
     try {
       final response = await http.post(
@@ -27,6 +30,7 @@ final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
       );
 
       final responseData = jsonDecode(response.body);
+      debugPrint("response: $responseData");
 
       if (response.statusCode == 200) {
         return responseData;
@@ -701,6 +705,74 @@ final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
     return {
       "success": false,
       "message": "Error: $e",
+    };
+  }
+}
+
+static Future<Map<String, dynamic>> createDistributor({
+  required String token,
+  required Map<String, dynamic> data,
+  List<Map<String, dynamic>> partners = const [],
+  List<Map<String, dynamic>> companies = const [],
+  Map<String, File?> files = const {},
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+  final url = Uri.parse('$baseUrl${Endpoints.createOnBoardingOfDistributor}');
+
+  final request = http.MultipartRequest('POST', url);
+
+  request.headers['Authorization'] = 'Bearer $token';
+
+  ///  1. ADD NORMAL FIELDS
+  data.forEach((key, value) {
+    if (value != null) {
+      request.fields[key] = value.toString();
+    }
+  });
+
+  ///  2. ADD JSON FIELDS
+  if (partners.isNotEmpty) {
+    request.fields['partners'] = jsonEncode(partners);
+  }
+
+  if (companies.isNotEmpty) {
+    request.fields['other_companies'] = jsonEncode(companies);
+  }
+
+  ///  3. ADD FILES
+  for (var entry in files.entries) {
+    if (entry.value != null) {
+      final file = entry.value!;
+      final extension = file.path.split('.').last.toLowerCase();
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          entry.key,
+          file.path,
+          contentType:
+              MediaType('image', extension == 'png' ? 'png' : 'jpeg'),
+        ),
+      );
+    }
+  }
+
+  print("FIELDS: ${request.fields}");
+  print("FILES: ${request.files.map((e) => e.field).toList()}");
+
+  final streamedResponse = await request.send();
+  final response = await http.Response.fromStream(streamedResponse);
+
+  print("STATUS: ${response.statusCode}");
+  print("BODY: ${response.body}");
+
+  if (response.statusCode == 201) {
+    return jsonDecode(response.body);
+  } else {
+    return {
+      "success": false,
+      "message": response.body,
     };
   }
 }

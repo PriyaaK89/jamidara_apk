@@ -56,6 +56,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
   final firmbankBranch = TextEditingController();
   final firmbankAccountNumber = TextEditingController();
   final firmbankIfsc = TextEditingController();
+  final firmlandmark = TextEditingController();
 
   // cheque details
   final cheque1Number = TextEditingController();
@@ -123,60 +124,60 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
   }
 
   Future<void> submitDistributor() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString('token') ?? '';
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token') ?? '';
 
-  List<Map<String, dynamic>> partnerList = [];
-  for (var p in partners) {
-    partnerList.add({
-      "name": p["name"]!.text,
-      "mobile_no": p["mobile"]!.text,
-      "father_name": "",
-      "address": "",
-    });
-  }
+    List<Map<String, dynamic>> partnerList = [];
+    for (var p in partners) {
+      partnerList.add({
+        "name": p["name"]!.text,
+        "mobile_no": p["mobile"]!.text,
+        "father_name": "",
+        "address": "",
+      });
+    }
 
-  if (firmType == "Partnership" && partnerList.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Add at least one partner")),
-    );
-    return;
-  }
+    if (firmType == "Partnership" && partnerList.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Add at least one partner")));
+      return;
+    }
 
-  List<Map<String, dynamic>> companyList = [];
-  for (var c in companies) {
-    companyList.add({
-      "company_name": c["name"]!.text,
-      "turnover": c["turnover"]!.text,
-    });
-  }
+    List<Map<String, dynamic>> companyList = [];
+    for (var c in companies) {
+      companyList.add({
+        "company_name": c["name"]!.text,
+        "turnover": c["turnover"]!.text,
+      });
+    }
 
-  final data = {
-    "customer_name": customerName.text,
-    "customer_dob": customerDOB.text,
-    "firm_name": firmName.text,
-    "gst_number": gstController.text,
-    "gst_type": gstType.toLowerCase(),
-    "firm_type": firmType.toLowerCase(),
-    "business_address": businessAddress.text,
-    "state": bussinesstate.text,
-    "district": bussinessdistrict.text,
-    "tehsil": bussinesstehsil.text,
-    "pincode": bussinesspincode.text,
-    "contact_number": bussinesscontact.text,
-    "alt_contact_number": bussinessaltcontact.text,
-    "source_of_funds": sourceOfFunds,
-    "bank_name": firmbankName.text,
-    "bank_account_no": firmbankAccountNumber.text,
-    "ifsc_code": firmbankIfsc.text,
-    "approver_name": "Admin",
-    "approving_date": DateTime.now().toString().split(" ")[0],
-  };
+    final data = {
+      "customer_name": customerName.text,
+      "customer_dob": customerDOB.text,
+      "firm_name": firmName.text,
+      "gst_number": gstController.text,
+      "gst_type": gstType.toLowerCase(),
+      "firm_type": firmType.toLowerCase(),
+      "business_address": businessAddress.text,
+      "state": bussinesstate.text,
+      "district": bussinessdistrict.text,
+      "tehsil": bussinesstehsil.text,
+      "pincode": bussinesspincode.text,
+      "contact_number": bussinesscontact.text,
+      "alt_contact_number": bussinessaltcontact.text,
+      "source_of_funds": sourceOfFunds,
+      "bank_name": firmbankName.text,
+      "bank_account_no": firmbankAccountNumber.text,
+      "ifsc_code": firmbankIfsc.text,
+      "approver_name": "Admin",
+      "approving_date": DateTime.now().toString().split(" ")[0],
+    };
 
-  Map<String, File?> files = {
-     "shop_image": null,
+    Map<String, File?> files = {
+      "shop_image": null,
       "cheque_photo": null,
       "pan_photo": null,
       "aadhar_photo": null,
@@ -188,28 +189,26 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
       "letter_head": null,
       "authority_letter": null,
       "partnership_deed": null,
-  }; // add later when using image picker
+    }; // add later when using image picker
 
-  final response = await ApiService.createDistributor(
-    token: token,
-    data: data,
-    partners: partnerList,
-    companies: companyList,
-    files: files,
-  );
+    final response = await ApiService.createDistributor(
+      token: token,
+      data: data,
+      partners: partnerList,
+      companies: companyList,
+      files: files,
+    );
 
-  if (response["success"] == true) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Distributor Created Successfully")),
-    );
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response["message"].toString())),
-    );
+    if (response["success"] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Distributor Created Successfully")),
+      );
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(response["message"].toString())));
+    }
   }
-}
-
-
 
   /// ADD PARTNER
   void addPartner() {
@@ -243,7 +242,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
       companies.removeAt(index);
     });
   }
-
+// customer dob ke liye date picker
   Future<void> _pickDate() async {
     DateTime? picked = await showDatePicker(
       context: context,
@@ -258,6 +257,24 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
       });
     }
   }
+  // license expiry ke liye date picker
+   Future<void> _pickSeedExpiryDate() async {
+  DateTime? picked = await showDatePicker(
+    context: context,
+    initialDate: DateTime.now(),
+    firstDate: DateTime(2000), // past allowed
+    lastDate: DateTime(2100), // ✅ future allowed
+  );
+
+  if (picked != null) {
+    setState(() {
+      seedLicenseExpiry.text =
+          "${picked.day.toString().padLeft(2, '0')}-"
+          "${picked.month.toString().padLeft(2, '0')}-"
+          "${picked.year}";
+    });
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -304,12 +321,14 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
             /// FORM CARD
             Container(
-              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.grey.shade300),
                 boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 10),
+                  BoxShadow(color: Colors.black12, blurRadius: 4),
                 ],
               ),
               child: Form(
@@ -319,7 +338,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     // gst no
                     TextFormField(
                       controller: gstController,
-                      decoration: input("GST Number"),
+                      decoration: input("Firm GST Number"),
                     ),
 
                     const SizedBox(height: 12),
@@ -331,7 +350,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     ),
 
                     const SizedBox(height: 12),
-
+                    //  customer DOB
                     InkWell(
                       onTap: _pickDate,
                       borderRadius: BorderRadius.circular(12),
@@ -364,7 +383,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     ),
 
                     const SizedBox(height: 12),
-
+                    //  gst type
                     DropdownButtonFormField(
                       value: gstType.isEmpty ? null : gstType,
                       items:
@@ -398,21 +417,72 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     ),
 
                     const SizedBox(height: 12),
+                    // firm email
+                    TextFormField(
+                      controller: firmEmail,
+                      decoration: input("Firm Email Id"),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // firm since
+                    TextFormField(
+                      controller: firmsince,
+                      decoration: input("Firm Since (Year)"),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+                    //  firm pan
+                    TextFormField(
+                      controller: firmPan,
+                      decoration: input("Firm PAN Number"),
+                    ),
+                    const SizedBox(height: 12),
+                    // firm aadhar
+                    TextFormField(
+                      controller: firmAadhar,
+                      decoration: input("Firm Aadhar Number"),
+                    ),
+                    const SizedBox(height: 12),
+
+                    //  branch name
+                    TextFormField(
+                      controller: branch,
+                      decoration: input("Branch"),
+                    ),
+                    const SizedBox(height: 12),
+
+                 TextFormField(
+                      controller: firmlandmark,
+                      decoration: input("Firm Landmark"),
+                 ),
+ const SizedBox(height: 12),
 
                     /// BUSINESS ADDRESS
+                    const Text(
+                      "Bussiness Address",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ),
+                     const SizedBox(height: 5),
                     TextFormField(
                       controller: businessAddress,
                       decoration: input("Business Address"),
                     ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: bussinesslandmark,
+                      decoration: input("Business Landmark"),
+                    ),
 
                     const SizedBox(height: 12),
-
                     TextFormField(
-  controller: bussinesscontact,
-  decoration: input("Contact Number"),
-  keyboardType: TextInputType.phone,
-),
-const SizedBox(height: 12),
+                      controller: bussinessterritory,
+                      decoration: input("Business Territory"),
+                    ),
+                    const SizedBox(height: 12),
 
                     TextFormField(
                       controller: bussinesstehsil,
@@ -443,7 +513,22 @@ const SizedBox(height: 12),
                       decoration: input("Pincode"),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: bussinesscontact,
+                      decoration: input("Contact Number"),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      controller: bussinessaltcontact,
+                      decoration: input("Alternate Contact Number"),
+                      keyboardType: TextInputType.phone,
+                    ),
+
+                    const SizedBox(height: 16),
+                    
 
                     ///  PARTNERS SECTION
                     if (firmType == "partnership") ...[
@@ -519,6 +604,42 @@ const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: addPartner,
                         child: const Text("Add Partner"),
+                      ),
+                      const SizedBox(height: 20),
+
+                   const Text(
+                      "Responsible Person Details",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ),
+                     const SizedBox(height: 5),
+
+                      TextFormField(
+                        controller: responsiblePersonName,
+                        decoration: input("Responsible Person Name"),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: responsiblePersonAddress,
+                        decoration: input("Responsible Person Address"),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: responsiblePersonMobile,
+                        decoration: input("Responsible Person Mobile"),
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: responsiblePersonAltMobile,
+                        decoration: input(
+                          "Responsible Person Alt Mobile",
+                        ),
+                        keyboardType: TextInputType.phone,
+
                       ),
 
                       const SizedBox(height: 20),
@@ -597,22 +718,86 @@ const SizedBox(height: 12),
                       child: const Text("Add Company"),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 13),
 
                     TextFormField(
-  controller: firmbankName,
-  decoration: input("Bank Name"),
-),
- const SizedBox(height: 20),
- TextFormField(
-  controller: firmbankAccountNumber,
-  decoration: input("Account Number"),
-  keyboardType: TextInputType.number,
-),
-TextFormField(
-  controller: firmbankIfsc,
-  decoration: input("IFSC Code"),
-),
+                      controller: firmbankName,
+                      decoration: input("Bank Name"),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: firmbankAccountNumber,
+                      decoration: input("Account Number"),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      controller: firmbankIfsc,
+                      decoration: input("IFSC Code"),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                        controller: firmbankBranch,
+                        decoration: input(
+                          "Bank Branch",
+                        ), 
+                      ),
+                    const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: cheque1Number,
+                        decoration: input(
+                          "Secutity Cheque 1 No.",
+                        ), 
+                      ),
+                    const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: cheque2Number,
+                        decoration: input(
+                          "Secutity Cheque 2 No.",
+                        ), 
+                      ),
+                    const SizedBox(height: 12),
+
+
+
+
+                      TextFormField(
+                        controller: annualTurnover,
+                        decoration: input(
+                          "Annual Turnover",
+                        ), 
+                      ),
+                    const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: creditdurationperiod,
+                        decoration: input(
+                          "Credit Duration Period (in days)",
+                        ), 
+                      ),
+                    const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: securityamount,
+                        decoration: input(
+                          "Security Amount",
+                        ), 
+                      ),
+                    const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: expectedsaleperyear,
+                        decoration: input(
+                          "Expected Sale Per Year",
+                        ), 
+                      ),
+                    const SizedBox(height: 12),
+
 
                     ///  SOURCE OF FUNDS
                     DropdownButtonFormField(
@@ -629,6 +814,60 @@ TextFormField(
                     ),
 
                     const SizedBox(height: 20),
+
+
+                      TextFormField(
+                      controller: seedLicenseNumber,
+                      decoration: input("Seed License Number"),
+                    ),
+
+                    const SizedBox(height: 12),
+                     InkWell(
+                      onTap: _pickSeedExpiryDate,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              seedLicenseExpiry.text.isEmpty
+                                  ? "Select Seed License Expiry Date"
+                                  : seedLicenseExpiry.text,
+                            ),
+                            const Icon(Icons.calendar_today, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: fertilizerLicenseNumber,
+                      decoration: input("Fertilizer License Number"),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: pesticideLicenseNumber,
+                      decoration: input("Pesticide License Number"),
+                    ),
+                     const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: transportAgency1Name,
+                        decoration: input("Transport Agency 1 Name"),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: transportAgency2Name,
+                        decoration: input("Transport Agency 2 Name"),
+                      ),
+
+                      const SizedBox(height: 20),
+
 
                     ///  SUBMIT BUTTON
                     InkWell(

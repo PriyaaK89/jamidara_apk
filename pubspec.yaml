@@ -51,6 +51,10 @@ dependencies:
   dropdown_search: ^5.0.6
   flutter_dotenv: ^5.1.0
   screen_protector: ^1.2.0
+  file_picker: ^8.0.0
+  sqflite: ^2.3.0
+  path: ^1.9.0
+  connectivity_plus: ^6.0.3
 
 dev_dependencies:
   flutter_test:
@@ -84,6 +88,7 @@ flutter:
     - assets/images/jsc_logo.png
     - assets/images/jamidara_logo.png
     - assets/images/mirrorless.png
+    - assets/images/visit_remaining.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

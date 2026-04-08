@@ -15,5 +15,10 @@ class Endpoints {
   static const String getProfile = '/auth/get-employee-details';
   static const String getStreetAddress = 'https://maps.googleapis.com/maps/api/geocode/json';
   static const String createOnBoardingOfDistributor = '/create-distributor';
+  static const String verifyGST = '/verify-gst';
+  static const String getTodayVisitCount = '/get-my-todayVisitCount';
+  static const String updateUserStatus = '/auth/update-status';
+  static const String sendForAadharKYC = '/digilocker-kyc';
+  static const String getDetailsFromAadhar = '/kyc-status';
 
 }

@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:convert'; 
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,6 +16,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AttendancePage extends StatefulWidget {
   final int employeeId;
@@ -42,170 +43,164 @@ class _AttendancePageState extends State<AttendancePage> {
   String odometerReading = '';
   String? currentLocation;
 
-
   File? selfieImage;
   File? odometerImage;
 
   final ImagePicker _picker = ImagePicker();
   bool isLoading = false;
 
- Future<Position> getSafeCurrentLocation() async {
-  bool serviceEnabled;
-  LocationPermission permission;
+  Future<Position> getSafeCurrentLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
 
-  serviceEnabled = await Geolocator.isLocationServiceEnabled();
-  if (!serviceEnabled) {
-    await Geolocator.openLocationSettings();
-    throw Exception("Location services are disabled.");
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      await Geolocator.openLocationSettings();
+      throw Exception("Location services are disabled.");
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        throw Exception("Location permission denied");
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      throw Exception("Location permission permanently denied");
+    }
+
+    return await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.bestForNavigation,
+      timeLimit: const Duration(seconds: 15),
+    );
   }
 
-  permission = await Geolocator.checkPermission();
-  if (permission == LocationPermission.denied) {
-    permission = await Geolocator.requestPermission();
-    if (permission == LocationPermission.denied) {
-      throw Exception("Location permission denied");
+  Future<String> getAddressFromGoogle(double lat, double lng) async {
+    final apiKey = dotenv.env['GOOGLE_API_KEY'] ?? '';
+
+    final url =
+        "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey";
+
+    final response = await http.get(Uri.parse(url));
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 &&
+        data['status'] == 'OK' &&
+        data['results'].isNotEmpty) {
+      return data['results'][0]['formatted_address'];
+    } else {
+      throw Exception("Google API failed: ${data['status']}");
     }
   }
 
-  if (permission == LocationPermission.deniedForever) {
-    throw Exception("Location permission permanently denied");
+  Future<String> getFullLocationDetails() async {
+    Position position = await getSafeCurrentLocation();
+
+    String formattedDate = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    String formattedTime = DateFormat('hh:mm a').format(DateTime.now());
+
+    String dateTimeLine = "Date: $formattedDate  Time: $formattedTime";
+
+    String addressLine = "";
+
+    try {
+      //  Try Google API first
+      addressLine = await getAddressFromGoogle(
+        position.latitude,
+        position.longitude,
+      );
+    } catch (e) {
+      print("Google API Error: $e");
+      //  Fallback to placemark
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      Placemark place = placemarks.first;
+
+      addressLine = [
+        place.subLocality,
+        place.locality,
+        place.administrativeArea,
+        place.postalCode,
+        place.country,
+      ].where((e) => e != null && e.isNotEmpty).join(', ');
+    }
+
+    String latLongLine =
+        "Lat: ${position.latitude}, Long: ${position.longitude}";
+
+    return "$dateTimeLine\n\n$addressLine\n\n$latLongLine";
   }
 
-  return await Geolocator.getCurrentPosition(
-    desiredAccuracy: LocationAccuracy.bestForNavigation,
-    timeLimit: const Duration(seconds: 15),
-  );
-}
+  Future<File?> addLocationStamp(File file) async {
+    final details = await getFullLocationDetails();
 
-Future<String> getAddressFromGoogle(double lat, double lng) async {
-  final apiKey = dotenv.env['GOOGLE_API_KEY'] ?? '';
+    final bytes = await file.readAsBytes();
+    img.Image? originalImage = img.decodeImage(bytes);
+    if (originalImage == null) return null;
 
-  final url =
-      "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey";
+    // Load logo from assets
+    final logoBytes = await rootBundle.load('assets/images/logo.png');
+    final logoImage = img.decodeImage(logoBytes.buffer.asUint8List());
 
-  final response = await http.get(Uri.parse(url));
+    // Split lines
+    List<String> lines = details.split("\n");
 
-  final data = jsonDecode(response.body);
+    int padding = 20;
+    int boxHeight = (lines.length * 60) + 40;
+    int startY = originalImage.height - boxHeight - 40;
 
-  if (response.statusCode == 200 &&
-      data['status'] == 'OK' &&
-      data['results'].isNotEmpty) {
-    return data['results'][0]['formatted_address'];
-  } else {
-    throw Exception("Google API failed: ${data['status']}");
-  }
-}
-
-Future<String> getFullLocationDetails() async {
-  Position position = await getSafeCurrentLocation();
-
-  String formattedDate =
-      DateFormat('dd-MM-yyyy').format(DateTime.now());
-  String formattedTime =
-      DateFormat('hh:mm a').format(DateTime.now());
-
-  String dateTimeLine = "Date: $formattedDate  Time: $formattedTime";
-
-  String addressLine = "";
-
-  try {
-    //  Try Google API first
-    addressLine = await getAddressFromGoogle(
-      position.latitude,
-      position.longitude,
-    );
-  } catch (e) {
-    print("Google API Error: $e");
-    //  Fallback to placemark
-    List<Placemark> placemarks =
-        await placemarkFromCoordinates(
-            position.latitude, position.longitude);
-
-    Placemark place = placemarks.first;
-
-    addressLine = [
-      place.subLocality,
-      place.locality,
-      place.administrativeArea,
-      place.postalCode,
-      place.country
-    ].where((e) => e != null && e.isNotEmpty).join(', ');
-  }
-
-  String latLongLine =
-      "Lat: ${position.latitude}, Long: ${position.longitude}";
-
-  return "$dateTimeLine\n\n$addressLine\n\n$latLongLine";
-}
-
-Future<File?> addLocationStamp(File file) async {
-  final details = await getFullLocationDetails();
-
-  final bytes = await file.readAsBytes();
-  img.Image? originalImage = img.decodeImage(bytes);
-  if (originalImage == null) return null;
-
-  // Load logo from assets
-  final logoBytes =
-      await rootBundle.load('assets/images/logo.png');
-  final logoImage =
-      img.decodeImage(logoBytes.buffer.asUint8List());
-
-  // Split lines
-  List<String> lines = details.split("\n");
-
-  int padding = 20;
-  int boxHeight = (lines.length * 60) + 40;
-  int startY = originalImage.height - boxHeight - 40;
-
-  img.fillRect(
-    originalImage,
-    x1: 0,
-    y1: startY - 20,
-    x2: originalImage.width,
-    y2: originalImage.height,
-    color: img.ColorRgba8(0, 0, 0, 200),
-  );
-
-final font = originalImage.width > 2000
-    ? img.arial48
-    : img.arial24;
-  // Draw text
-  for (int i = 0; i < lines.length; i++) {
-    img.drawString(
+    img.fillRect(
       originalImage,
-      lines[i],
-      font: font,
-      x: padding,
-    y: startY + (i * 50),
-      color: img.ColorRgb8(255, 255, 255),
+      x1: 0,
+      y1: startY - 20,
+      x2: originalImage.width,
+      y2: originalImage.height,
+      color: img.ColorRgba8(0, 0, 0, 200),
     );
-  }
 
-if (logoImage != null) {
-  // Resize logo properly
-  final resizedLogo = img.copyResize(
-    logoImage,
-    width: originalImage.width ~/ 3, // dynamic width
-  );
+    final font = originalImage.width > 2000 ? img.arial48 : img.arial24;
+    // Draw text
+    for (int i = 0; i < lines.length; i++) {
+      img.drawString(
+        originalImage,
+        lines[i],
+        font: font,
+        x: padding,
+        y: startY + (i * 50),
+        color: img.ColorRgb8(255, 255, 255),
+      );
+    }
 
-  img.compositeImage(
-    originalImage,
-    resizedLogo,
-    dstX: originalImage.width - resizedLogo.width - 20,
-    dstY: 20,
-  );
-}
+    if (logoImage != null) {
+      // Resize logo properly
+      final resizedLogo = img.copyResize(
+        logoImage,
+        width: originalImage.width ~/ 3, // dynamic width
+      );
+
+      img.compositeImage(
+        originalImage,
+        resizedLogo,
+        dstX: originalImage.width - resizedLogo.width - 20,
+        dstY: 20,
+      );
+    }
 
     final dir = await getApplicationDocumentsDirectory();
-final newPath =
-    '${dir.path}/stamped_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final newPath =
+        '${dir.path}/stamped_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-final newFile = File(newPath)
-  ..writeAsBytesSync(img.encodeJpg(originalImage, quality: 90));
+    final newFile = File(newPath)
+      ..writeAsBytesSync(img.encodeJpg(originalImage, quality: 90));
 
-  return newFile;
-}
+    return newFile;
+  }
 
   bool isFormValid() {
     if (attendanceType == null) return false;
@@ -231,8 +226,11 @@ final newFile = File(newPath)
       if ((workType == 'office' && selfieImage == null)) return false;
 
       if (attendanceType == 'day_over') {
-  if (selfieImage == null) return false;
-}
+        if (selfieImage == null) return false;
+        if (odometerReading.isEmpty) return false;
+        if (workType == 'field' && odometerImage == null) return false;
+        if (workType == 'office' && selfieImage == null) return false;
+      }
     }
     return true;
   }
@@ -253,188 +251,223 @@ final newFile = File(newPath)
     return compressedFile != null ? File(compressedFile.path) : null;
   }
 
-Future<void> pickImage(String type) async {
-  final XFile? pickedFile = await _picker.pickImage(
-    source: ImageSource.camera,
-    imageQuality: 50,
-  );
+  Future<void> pickImage(String type) async {
+    final XFile? pickedFile = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 50,
+    );
 
-  if (pickedFile != null) {
-    File imageFile = File(pickedFile.path);
+    if (pickedFile != null) {
+      File imageFile = File(pickedFile.path);
+      setState(() {
+        if (type == 'selfie') {
+          selfieImage = imageFile;
+        } else {
+          odometerImage = imageFile;
+        }
+      });
+    }
+  }
+
+  Future<void> handleSubmit() async {
+    if (!isFormValid()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all required fields')),
+      );
+      return;
+    }
+
     setState(() {
-      if (type == 'selfie') {
-        selfieImage = imageFile;
-      } else {
-        odometerImage = imageFile;
-      }
+      isLoading = true;
     });
-  }
-}
- Future<void> handleSubmit() async {
-  if (!isFormValid()) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Please fill all required fields')),
-    );
-    return;
-  }
 
-  setState(() {
-    isLoading = true;
-  });
+    final submittedAttendanceType = attendanceType; // <-- save first
+    final submittedWorkType = workType;
+    final submittedWorkingArea = workingArea;
+    final submittedTravelMode = travelMode;
+    final submittedVehicleType = vehicleType;
+    final submittedVisitLocation = visitLocation;
+    final submittedOdometerReading = odometerReading.isNotEmpty
+        ? odometerReading
+        : null;
 
-  final submittedAttendanceType = attendanceType;   // <-- save first
-  final submittedWorkType = workType;
-  final submittedWorkingArea = workingArea;
-  final submittedTravelMode = travelMode;
-  final submittedVehicleType = vehicleType;
-  final submittedVisitLocation = visitLocation;
-  final submittedOdometerReading =
-      odometerReading.isNotEmpty ? odometerReading : null;
+    if (submittedAttendanceType == "day_over" && submittedWorkType == "field") {
+      final visitRes = await ApiService.getTodayVisitCount(widget.token);
 
-  try {
-    File? stampedSelfie;
-    File? stampedOdometer;
+      if (visitRes["success"] == true) {
+        int visits = visitRes["totalVisits"] ?? 0;
 
+        if (visits < 4) {
+          bool proceed = await showHalfDayWarning(visits);
 
-    if (submittedAttendanceType == "day_over") {
-  try {
-    currentLocation = await getFullLocationDetails();
-  } catch (e) {
-    Flushbar(
-      message: "Unable to fetch location. Please enable GPS.",
-      duration: const Duration(seconds: 3),
-      flushbarPosition: FlushbarPosition.BOTTOM, //  bottom position
-      backgroundColor: Colors.red,
-      margin: const EdgeInsets.all(20),
-      borderRadius: BorderRadius.circular(8),
-      icon: const Icon(Icons.location_off, color: Colors.white),
-    ).show(context);
-
-    setState(() => isLoading = false);
-    return;
-  }
-}
-
-    if (selfieImage != null) {
-      stampedSelfie = await addLocationStamp(selfieImage!);
+          if (!proceed) {
+            setState(() => isLoading = false);
+            return; // STOP submission
+          }
+        }
+      }
     }
 
-    if (odometerImage != null) {
-      stampedOdometer = await addLocationStamp(odometerImage!);
-    }
+    try {
+      File? stampedSelfie;
+      File? stampedOdometer;
 
-    final compressedSelfie =
-        stampedSelfie != null ? await compressImage(stampedSelfie) : null;
-    final compressedOdometer =
-        stampedOdometer != null ? await compressImage(stampedOdometer) : null;
+      if (submittedAttendanceType == "day_over") {
+        try {
+          currentLocation = await getFullLocationDetails();
+        } catch (e) {
+          Flushbar(
+            message: "Unable to fetch location. Please enable GPS.",
+            duration: const Duration(seconds: 3),
+            flushbarPosition: FlushbarPosition.BOTTOM, //  bottom position
+            backgroundColor: Colors.red,
+            margin: const EdgeInsets.all(20),
+            borderRadius: BorderRadius.circular(8),
+            icon: const Icon(Icons.location_off, color: Colors.white),
+          ).show(context);
 
-    final response = await ApiService.markAttendance(
-      employeeId: widget.employeeId,
-      token: widget.token,
-      status: submittedAttendanceType!,
-      workType: submittedWorkType,
-      fieldWorkType: submittedWorkingArea,
-      travelMode: submittedTravelMode,
-      vehicleType: submittedVehicleType,
-      visitLocation: submittedAttendanceType == "day_over"
-          ? currentLocation
-          : submittedVisitLocation,
-      odometerReading: submittedOdometerReading,
-      selfie: compressedSelfie ?? stampedSelfie ?? selfieImage,
-      odometerImage: compressedOdometer ?? stampedOdometer ?? odometerImage,
-    );
+          setState(() => isLoading = false);
+          return;
+        }
+      }
 
-  Flushbar(
-  message: response['message'] ?? 'Attendance submitted',
-  duration: const Duration(seconds: 2),
-  flushbarPosition: FlushbarPosition.BOTTOM,
-  backgroundColor: Colors.green,
-  margin: const EdgeInsets.all(20),
-  borderRadius: BorderRadius.circular(8),
-  icon: const Icon(Icons.check_circle, color: Colors.white),
-).show(context);
+      if (selfieImage != null) {
+        stampedSelfie = await addLocationStamp(selfieImage!);
+      }
 
-    final service = FlutterBackgroundService();
+      if (odometerImage != null) {
+        stampedOdometer = await addLocationStamp(odometerImage!);
+      }
+
+      final compressedSelfie = stampedSelfie != null
+          ? await compressImage(stampedSelfie)
+          : null;
+      final compressedOdometer = stampedOdometer != null
+          ? await compressImage(stampedOdometer)
+          : null;
+
+      final response = await ApiService.markAttendance(
+        employeeId: widget.employeeId,
+        token: widget.token,
+        status: submittedAttendanceType!,
+        workType: submittedWorkType,
+        fieldWorkType: submittedWorkingArea,
+        travelMode: submittedTravelMode,
+        vehicleType: submittedVehicleType,
+        visitLocation: submittedAttendanceType == "day_over"
+            ? currentLocation
+            : submittedVisitLocation,
+        odometerReading: submittedOdometerReading,
+        selfie: compressedSelfie ?? stampedSelfie ?? selfieImage,
+        odometerImage: compressedOdometer ?? stampedOdometer ?? odometerImage,
+      );
+
+      Flushbar(
+        message: response['message'] ?? 'Attendance submitted',
+        duration: const Duration(seconds: 2),
+        flushbarPosition: FlushbarPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        margin: const EdgeInsets.all(20),
+        borderRadius: BorderRadius.circular(8),
+        icon: const Icon(Icons.check_circle, color: Colors.white),
+      ).show(context);
+
+      final service = FlutterBackgroundService();
 
       if (submittedAttendanceType == "present") {
-  bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString("work_type", submittedWorkType ?? "");
+        await prefs.reload();
+        print("WORK TYPE: $workType");
 
-  if (!serviceEnabled) {
-    await Flushbar(
-      message: "Please enable GPS",
-      duration: const Duration(seconds: 2),
-      flushbarPosition: FlushbarPosition.BOTTOM,
-      backgroundColor: Colors.orange,
-      margin: const EdgeInsets.all(20),
-      borderRadius: BorderRadius.circular(8),
-      icon: const Icon(Icons.location_on, color: Colors.white),
-    ).show(context);
+        await prefs.remove("last_notify_time");
 
-    await Geolocator.openLocationSettings();
-    return;
-  }
+        final running = await service.isRunning();
 
+        if (running) {
+          service.invoke("stopService");
+          await Future.delayed(const Duration(seconds: 1));
+        }
 
-      PermissionStatus foreground = await Permission.locationWhenInUse.status;
-      if (!foreground.isGranted) {
-        foreground = await Permission.locationWhenInUse.request();
-      }
-
-      if (!foreground.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Foreground location permission is required"),
-          ),
-        );
-        return;
-      }
-
-      PermissionStatus background = await Permission.locationAlways.status;
-      if (!background.isGranted) {
-        background = await Permission.locationAlways.request();
-      }
-
-      if (!background.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Please allow background location from settings"),
-            action: SnackBarAction(
-              label: "Settings",
-              onPressed: openAppSettings,
-            ),
-          ),
-        );
-        return;
-      }
-
-      if (await Permission.notification.isDenied) {
-        await Permission.notification.request();
-      }
-
-      final running = await service.isRunning();
-      if (!running) {
         await service.startService();
-      }
-    }
 
-    if (submittedAttendanceType == "day_over") {
-      final running = await service.isRunning();
-      if (running) {
-        service.invoke("stopService");
-      }
-    }
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
-    resetForm();   // <-- move here, at the end
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error: $e')),
-    );
-  } finally {
-    setState(() {
-      isLoading = false;
-    });
+        if (!serviceEnabled) {
+          await Flushbar(
+            message: "Please enable GPS",
+            duration: const Duration(seconds: 2),
+            flushbarPosition: FlushbarPosition.BOTTOM,
+            backgroundColor: Colors.orange,
+            margin: const EdgeInsets.all(20),
+            borderRadius: BorderRadius.circular(8),
+            icon: const Icon(Icons.location_on, color: Colors.white),
+          ).show(context);
+
+          await Geolocator.openLocationSettings();
+          return;
+        }
+
+        PermissionStatus foreground = await Permission.locationWhenInUse.status;
+        if (!foreground.isGranted) {
+          foreground = await Permission.locationWhenInUse.request();
+        }
+
+        if (!foreground.isGranted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Foreground location permission is required"),
+            ),
+          );
+          return;
+        }
+
+        PermissionStatus background = await Permission.locationAlways.status;
+        if (!background.isGranted) {
+          background = await Permission.locationAlways.request();
+        }
+
+        if (!background.isGranted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                "Please allow background location from settings",
+              ),
+              action: SnackBarAction(
+                label: "Settings",
+                onPressed: openAppSettings,
+              ),
+            ),
+          );
+          return;
+        }
+
+        if (await Permission.notification.isDenied) {
+          await Permission.notification.request();
+        }
+        // final running = await service.isRunning();
+        // if (!running) {
+        //   await service.startService();
+        // }
+      }
+
+      if (submittedAttendanceType == "day_over") {
+        final running = await service.isRunning();
+        if (running) {
+          service.invoke("stopService");
+        }
+      }
+      resetForm(); // <-- move here, at the end
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
-}
 
   void resetForm() {
     setState(() {
@@ -452,215 +485,235 @@ Future<void> pickImage(String type) async {
     _formKey.currentState?.reset();
   }
 
+  Future<bool> showHalfDayWarning(int visits) async {
+    return await showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text("Warning"),
+              content: Text(
+                "You have completed only $visits visits.\n"
+                "Less than 4 visits will count as HALF DAY.\n\n"
+                "Do you want to continue?",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text("OK"),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+  }
+
   @override
   Widget build(BuildContext context) {
-  return SingleChildScrollView(
-  padding: const EdgeInsets.all(16),
-  child: Form(
-    key: _formKey,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Attendance Type',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Row(
+              children: [
+                OptionButton(
+                  text: 'Present',
+                  value: 'present',
+                  selectedValue: attendanceType,
+                  onTap: (val) {
+                    setState(() {
+                      attendanceType = val;
+                      workType = null;
+                    });
+                  },
+                ),
+                OptionButton(
+                  text: 'Day Over',
+                  value: 'day_over',
+                  selectedValue: attendanceType,
+                  onTap: (val) {
+                    setState(() {
+                      attendanceType = val;
+                      workType = null;
+                    });
+                  },
+                ),
+                OptionButton(
+                  text: 'Leave',
+                  value: 'leave',
+                  selectedValue: attendanceType,
+                  onTap: (val) {
+                    setState(() {
+                      attendanceType = val;
+                      workType = null;
+                    });
+                  },
+                ),
+              ],
+            ),
+            if (attendanceType == 'present' ||
+                attendanceType == 'day_over') ...[
+              const SizedBox(height: 12),
               const Text(
-                'Attendance Type',
+                'Work Type',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               Row(
                 children: [
                   OptionButton(
-                    text: 'Present',
-                    value: 'present',
-                    selectedValue: attendanceType,
+                    text: 'Field Work',
+                    value: 'field',
+                    selectedValue: workType,
                     onTap: (val) {
                       setState(() {
-                        attendanceType = val;
-                        workType = null;
+                        workType = val;
                       });
                     },
                   ),
                   OptionButton(
-                    text: 'Day Over',
-                    value: 'day_over',
-                    selectedValue: attendanceType,
+                    text: 'Office Sitting',
+                    value: 'office',
+                    selectedValue: workType,
                     onTap: (val) {
                       setState(() {
-                        attendanceType = val;
-                        workType = null;
+                        workType = val;
                       });
                     },
                   ),
                   OptionButton(
-                    text: 'Leave',
-                    value: 'leave',
-                    selectedValue: attendanceType,
+                    text: 'WFH',
+                    value: 'work_from_home',
+                    selectedValue: workType,
                     onTap: (val) {
                       setState(() {
-                        attendanceType = val;
-                        workType = null;
+                        workType = val;
                       });
                     },
                   ),
                 ],
               ),
-              if (attendanceType == 'present' ||
-                  attendanceType == 'day_over') ...[
-                const SizedBox(height: 12),
-                const Text(
-                  'Work Type',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Row(
-                  children: [
-                    OptionButton(
-                      text: 'Field Work',
-                      value: 'field',
-                      selectedValue: workType,
-                      onTap: (val) {
-                        setState(() {
-                          workType = val;
-                        });
-                      },
-                    ),
-                    OptionButton(
-                      text: 'Office Sitting',
-                      value: 'office',
-                      selectedValue: workType,
-                      onTap: (val) {
-                        setState(() {
-                          workType = val;
-                        });
-                      },
-                    ),
-                    OptionButton(
-                      text: 'WFH',
-                      value: 'work_from_home',
-                      selectedValue: workType,
-                      onTap: (val) {
-                        setState(() {
-                          workType = val;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ],
-              if (attendanceType == 'present' && workType == 'field') ...[
-                const SizedBox(height: 12),
-                const Text(
-                  'Working Area',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Row(
-                  children: [
-                    OptionButton(
-                      text: 'City',
-                      value: 'city',
-                      selectedValue: workingArea,
-                      onTap: (val) {
-                        setState(() {
-                          workingArea = val;
-                        });
-                      },
-                    ),
-                    OptionButton(
-                      text: 'Ex City',
-                      value: 'ex_city',
-                      selectedValue: workingArea,
-                      onTap: (val) {
-                        setState(() {
-                          workingArea = val;
-                        });
-                      },
-                    ),
-                    OptionButton(
-                      text: 'Tour',
-                      value: 'tour',
-                      selectedValue: workingArea,
-                      onTap: (val) {
-                        setState(() {
-                          workingArea = val;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Travel Mode',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Row(
-                  children: [
-                    OptionButton(
-                      text: 'Public',
-                      value: 'public',
-                      selectedValue: travelMode,
-                      onTap: (val) {
-                        setState(() {
-                          travelMode = val;
-                        });
-                      },
-                    ),
-                    OptionButton(
-                      text: 'Private',
-                      value: 'private',
-                      selectedValue: travelMode,
-                      onTap: (val) {
-                        setState(() {
-                          travelMode = val;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-                if (travelMode == 'private') ...[
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Vehicle Type',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+            ],
+            if (attendanceType == 'present' && workType == 'field') ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Working Area',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Row(
+                children: [
+                  OptionButton(
+                    text: 'Local',
+                    value: 'city',
+                    selectedValue: workingArea,
+                    onTap: (val) {
+                      setState(() {
+                        workingArea = val;
+                      });
+                    },
                   ),
-                  Row(
-                    children: [
-                      OptionButton(
-                        text: 'Two Wheeler',
-                        value: 'two_wheeler',
-                        selectedValue: vehicleType,
-                        onTap: (val) {
-                          setState(() {
-                            vehicleType = val;
-                          });
-                        },
-                      ),
-                      OptionButton(
-                        text: 'Four Wheeler',
-                        value: 'four_wheeler',
-                        selectedValue: vehicleType,
-                        onTap: (val) {
-                          setState(() {
-                            vehicleType = val;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'Odometer Reading',
-                    ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (val) => odometerReading = val,
+                  OptionButton(
+                    text: 'Tour',
+                    value: 'tour',
+                    selectedValue: workingArea,
+                    onTap: (val) {
+                      setState(() {
+                        workingArea = val;
+                      });
+                    },
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Travel Mode',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Row(
+                children: [
+                  OptionButton(
+                    text: 'Public',
+                    value: 'public',
+                    selectedValue: travelMode,
+                    onTap: (val) {
+                      setState(() {
+                        travelMode = val;
+                      });
+                    },
+                  ),
+                  OptionButton(
+                    text: 'Private',
+                    value: 'private',
+                    selectedValue: travelMode,
+                    onTap: (val) {
+                      setState(() {
+                        travelMode = val;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              if (travelMode == 'private') ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Vehicle Type',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Row(
+                  children: [
+                    OptionButton(
+                      text: 'Two Wheeler',
+                      value: 'two_wheeler',
+                      selectedValue: vehicleType,
+                      onTap: (val) {
+                        setState(() {
+                          vehicleType = val;
+                        });
+                      },
+                    ),
+                    OptionButton(
+                      text: 'Four Wheeler',
+                      value: 'four_wheeler',
+                      selectedValue: vehicleType,
+                      onTap: (val) {
+                        setState(() {
+                          vehicleType = val;
+                        });
+                      },
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 TextFormField(
                   decoration: const InputDecoration(
-                    labelText: 'Visit Location',
+                    labelText: 'Odometer Reading',
                   ),
-                  onChanged: (val) => visitLocation = val,
+                  keyboardType: TextInputType.number,
+                  // onChanged: (val) => odometerReading = val,
+                  onChanged: (val) {
+                    setState(() {
+                      odometerReading = val;
+                    });
+                  },
                 ),
+              ],
+              const SizedBox(height: 12),
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'Visit Location'),
+                onChanged: (val) => visitLocation = val,
+              ),
 
-                 const SizedBox(height: 12),
+              const SizedBox(height: 12),
               if (travelMode == 'private')
                 Center(
                   child: ElevatedButton(
@@ -670,105 +723,105 @@ Future<void> pickImage(String type) async {
                 ),
               if (odometerImage != null)
                 Image.file(odometerImage!, height: 150),
-              ],
+            ],
 
-        
-              if (attendanceType == 'day_over' && workType == 'field') ...[
-  const SizedBox(height: 12),
-
-  const Text(
-    'Odometer Reading',
-    style: TextStyle(fontWeight: FontWeight.bold),
-  ),
-
-  const SizedBox(height: 8),
-
-  TextFormField(
-    decoration: const InputDecoration(
-      labelText: 'Day Over Odometer Reading',
-    ),
-    keyboardType: TextInputType.number,
-    onChanged: (val) => odometerReading = val,
-  ),
-
-  const SizedBox(height: 12),
-
-  Center(
-    child: ElevatedButton(
-      onPressed: () => pickImage('odometer'),
-      child: const Text('Take Odometer Image'),
-    ),
-  ),
-
-  if (odometerImage != null)
-    Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Image.file(odometerImage!, height: 150),
-    ),
-],
-
+            if (attendanceType == 'day_over' && workType == 'field') ...[
               const SizedBox(height: 12),
+
+              const Text(
+                'Odometer Reading',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Day Over Odometer Reading',
+                ),
+                keyboardType: TextInputType.number,
+                onChanged: (val) {
+                  setState(() {
+                    odometerReading = val;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+
               Center(
                 child: ElevatedButton(
-                  onPressed: () => pickImage('selfie'),
-                  child: const Text('Take Selfie'),
+                  onPressed: () => pickImage('odometer'),
+                  child: const Text('Take Odometer Image'),
                 ),
               ),
-              if (selfieImage != null && selfieImage!.existsSync())
-  Image.file(selfieImage!, height: 150),
-             
-              const SizedBox(height: 20),
-              Center(
-                child: GestureDetector(
-                  onTap: (isFormValid() && !isLoading) ? handleSubmit : null,
-                  child: Container(
-                    width: 220,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      gradient: isFormValid()
-                          ? const LinearGradient(
-                              colors: [Color(0xFF4A90E2), Color(0xFF007AFF)],
-                            )
-                          : const LinearGradient(
-                              colors: [Colors.grey, Colors.grey],
-                            ),
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        if (isFormValid())
-                          BoxShadow(
-                            color: Colors.blue.withOpacity(0.4),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
+
+              if (odometerImage != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Image.file(odometerImage!, height: 150),
+                ),
+            ],
+
+            const SizedBox(height: 12),
+            Center(
+              child: ElevatedButton(
+                onPressed: () => pickImage('selfie'),
+                child: const Text('Take Selfie'),
+              ),
+            ),
+            if (selfieImage != null && selfieImage!.existsSync())
+              Image.file(selfieImage!, height: 150),
+
+            const SizedBox(height: 20),
+            Center(
+              child: GestureDetector(
+                onTap: (isFormValid() && !isLoading) ? handleSubmit : null,
+                child: Container(
+                  width: 220,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: isFormValid()
+                        ? const LinearGradient(
+                            colors: [Color(0xFF4A90E2), Color(0xFF007AFF)],
+                          )
+                        : const LinearGradient(
+                            colors: [Colors.grey, Colors.grey],
                           ),
-                      ],
-                    ),
-                   child: Center(
-  child: isLoading
-      ? const SizedBox(
-          height: 20,
-          width: 20,
-          child: CircularProgressIndicator(
-            color: Colors.white,
-            strokeWidth: 2,
-          ),
-        )
-      : const Text(
-          'SUBMIT',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1,
-          ),
-        ),
-),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      if (isFormValid())
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                    ],
+                  ),
+                  child: Center(
+                    child: isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'SUBMIT',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
                   ),
                 ),
               ),
-           ],
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-
+    );
   }
 }

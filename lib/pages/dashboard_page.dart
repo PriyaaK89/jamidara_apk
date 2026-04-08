@@ -1,16 +1,148 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   final int employeeId;
 
   const DashboardPage({super.key, required this.employeeId});
 
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    /// Run after UI loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkVisitReminder();
+    });
+  }
+
+  ///  API Call to check today's visits
+  Future<void> _checkVisitReminder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token") ?? "";
+
+      final visitRes = await ApiService.getTodayVisitCount(token);
+
+      if (visitRes["success"] == true) {
+        int visits = visitRes["totalVisits"] ?? visitRes["visits"] ?? 0;
+
+
+        if (visits < 4) {
+          await _showVisitReminderDialog(visits);
+         
+        }
+      }
+    } catch (e) {
+      debugPrint("Dashboard visit check error: $e");
+    }
+  }
+
+  ///  Dialog with Image
+ Future<void> _showVisitReminderDialog(int visits) async {
+  int remaining = 4 - visits;
+
+  await showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Dialog(
+       backgroundColor: const Color.fromARGB(255, 249, 249, 249),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Stack(
+        children: [
+
+          /// Main Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+
+                /// Image
+                Image.asset(
+                  'assets/images/visit_remaining.png',
+                  height: 120,
+                ),
+
+                const SizedBox(height: 12),
+
+                /// Title
+                const Text(
+                  "Visit Reminder",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                /// Message
+                Text(
+                  visits == 0
+                      ? "You haven't started visits yet.\nComplete 4 visits to avoid half day."
+                      : "You have completed $visits visit(s).\nComplete $remaining more to avoid half day.",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14),
+                ),
+
+                const SizedBox(height: 16),
+
+                /// Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1B5E20),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      "OK",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                )
+              ],
+            ),
+          ),
+
+          /// Close Icon (Top Right)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: InkWell(
+              onTap: () => Navigator.pop(context),
+              child: const Icon(
+                Icons.close,
+                size: 22,
+                color: Colors.black54,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
+
           /// Greeting Card
           Container(
             width: double.infinity,
@@ -33,7 +165,7 @@ class DashboardPage extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          /// Stats Cards
+          /// Stats Cards Row 1
           Row(
             children: const [
               Expanded(child: _StatCard(title: "Visits", value: "12")),
@@ -44,6 +176,7 @@ class DashboardPage extends StatelessWidget {
 
           const SizedBox(height: 10),
 
+          /// Stats Cards Row 2
           Row(
             children: const [
               Expanded(child: _StatCard(title: "Sales", value: "₹25K")),
@@ -53,37 +186,13 @@ class DashboardPage extends StatelessWidget {
           ),
 
           const SizedBox(height: 20),
-
-          /// Quick Actions
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              "Quick Actions",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: const [
-              _QuickAction(icon: Icons.add_location, title: "Visit"),
-              _QuickAction(icon: Icons.shopping_cart, title: "Order"),
-              _QuickAction(icon: Icons.receipt, title: "Expense"),
-            ],
-          ),
         ],
       ),
     );
   }
 }
 
+///  Stat Card Widget
 class _StatCard extends StatelessWidget {
   final String title;
   final String value;
@@ -105,35 +214,20 @@ class _StatCard extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(title, style: const TextStyle(color: Colors.grey)),
+          Text(
+            title,
+            style: const TextStyle(color: Colors.grey),
+          ),
         ],
       ),
-    );
-  }
-}
-
-class _QuickAction extends StatelessWidget {
-  final IconData icon;
-  final String title;
-
-  const _QuickAction({required this.icon, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        CircleAvatar(
-          backgroundColor: const Color(0xFF1B5E20).withOpacity(0.1),
-          child: Icon(icon, color: const Color(0xFF1B5E20)),
-        ),
-        const SizedBox(height: 6),
-        Text(title, style: const TextStyle(fontSize: 12)),
-      ],
     );
   }
 }

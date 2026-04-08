@@ -14,6 +14,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class VisitPage extends StatefulWidget {
   const VisitPage({super.key});
@@ -50,7 +51,7 @@ class _VisitPageState extends State<VisitPage> {
   List<Map<String, dynamic>> customerList = [];
   int? selectedCustomerId;
   bool isLoadingCustomers = false;
-
+  bool isImageLoading = false;
 
   @override
   void dispose() {
@@ -65,7 +66,6 @@ class _VisitPageState extends State<VisitPage> {
     firmAddressController.dispose();
     super.dispose();
   }
-
 
   void _showFlushbar(String message, {bool isSuccess = false}) {
     if (!mounted) return;
@@ -136,159 +136,156 @@ class _VisitPageState extends State<VisitPage> {
     });
   }
 
-Future<Position> _getLocation() async {
-  bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-  if (!serviceEnabled) {
-    await Geolocator.openLocationSettings();
-    throw Exception("Location disabled");
-  }
-
-  LocationPermission permission = await Geolocator.checkPermission();
-  if (permission == LocationPermission.denied) {
-    permission = await Geolocator.requestPermission();
-  }
-
-  return await Geolocator.getCurrentPosition(
-    desiredAccuracy: LocationAccuracy.high,
-  );
-}
-
-Future<String> _getAddress(double lat, double lng) async {
-  try {
-    final apiKey = dotenv.env['GOOGLE_API_KEY'] ?? '';
-
-    if (apiKey.isEmpty) {
-      throw Exception("Google API key missing in .env");
+  Future<Position> _getLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      await Geolocator.openLocationSettings();
+      throw Exception("Location disabled");
     }
 
-    final url =
-        "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey";
-
-    final res = await http.get(Uri.parse(url));
-    final data = jsonDecode(res.body);
-
-    if (res.statusCode == 200 &&
-        data['status'] == 'OK' &&
-        data['results'] != null &&
-        data['results'].isNotEmpty) {
-      return data['results'][0]['formatted_address'];
-    } else {
-      throw Exception("Google API failed: ${data['status']}");
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
     }
-  } catch (e) {
-    print("Google API failed: $e");
-  }
 
-  //  fallback (offline-safe)
-  try {
-    List<Placemark> placemarks =
-        await placemarkFromCoordinates(lat, lng);
-
-    final place = placemarks.first;
-
-    return [
-      place.subLocality,
-      place.locality,
-      place.administrativeArea,
-      place.postalCode,
-      place.country
-    ].where((e) => e != null && e.isNotEmpty).join(', ');
-  } catch (e) {
-    return "Location unavailable";
-  }
-}
-
-Future<File?> _stampImage(File file) async {
-  try {
-    //  Get location
-    final position = await _getLocation();
-
-    //  Get address
-    final address = await _getAddress(
-      position.latitude,
-      position.longitude,
+    return await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
     );
-
-    //  Date & Time
-    String date =
-        DateFormat('dd-MM-yyyy').format(DateTime.now());
-    String time =
-        DateFormat('hh:mm a').format(DateTime.now());
-
-    //  Text lines
-    List<String> lines = [
-      "Date: $date  Time: $time",
-      address,
-      "Lat: ${position.latitude}, Lng: ${position.longitude}"
-    ];
-
-    //  Load image
-    final bytes = await file.readAsBytes();
-    img.Image? image = img.decodeImage(bytes);
-    if (image == null) return null;
-
-    
-
-         final logoBytes =
-      await rootBundle.load('assets/images/logo.png');
-  final logo =
-      img.decodeImage(logoBytes.buffer.asUint8List());
-
-    //  Draw background box
-    int padding = 20;
-    int boxHeight = (lines.length * 50) + 40;
-    int startY = image.height - boxHeight - 20;
-
-    img.fillRect(
-      image,
-      x1: 0,
-      y1: startY,
-      x2: image.width,
-      y2: image.height,
-      color: img.ColorRgba8(0, 0, 0, 180),
-    );
-
-    //  Draw text
-    final font = img.arial24;
-
-    for (int i = 0; i < lines.length; i++) {
-      img.drawString(
-        image,
-        lines[i],
-        font: font,
-        x: padding,
-        y: startY + 10 + (i * 40),
-        color: img.ColorRgb8(255, 255, 255),
-      );
-    }
-
-    //  Add logo (top-right)
-    if (logo != null) {
-      final resizedLogo =
-          img.copyResize(logo, width: image.width ~/ 4);
-
-      img.compositeImage(
-        image,
-        resizedLogo,
-        dstX: image.width - resizedLogo.width - 10,
-        dstY: 10,
-      );
-    }
-
-    //  Save image
-    final dir = await getApplicationDocumentsDirectory();
-    final newPath =
-        '${dir.path}/visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-    final newFile = File(newPath)
-      ..writeAsBytesSync(img.encodeJpg(image, quality: 90));
-
-    return newFile;
-  } catch (e) {
-    print("Stamp error: $e");
-    return null;
   }
-}
+
+  Future<String> _getAddress(double lat, double lng) async {
+    try {
+      final apiKey = dotenv.env['GOOGLE_API_KEY'] ?? '';
+
+      final url =
+          "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey";
+
+      final res = await http.get(Uri.parse(url));
+      final data = jsonDecode(res.body);
+
+      print("STATUS CODE: ${res.statusCode}");
+      print("GOOGLE STATUS: ${data['status']}");
+      print("FULL RESPONSE: $data");
+
+      if (res.statusCode == 200 &&
+          data['status'] == 'OK' &&
+          data['results'] != null &&
+          data['results'].isNotEmpty) {
+        final address = data['results'][0]['formatted_address'];
+        print("API ADDRESS: $address");
+
+        return address; // SHOULD RETURN HERE
+      } else {
+        print("Google API failed reason: ${data['status']}");
+        throw Exception("Google API failed");
+      }
+    } catch (e) {
+      print("Google API failed: $e");
+    }
+
+    // fallback
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lng);
+
+      final place = placemarks.first;
+
+      final fallbackAddress = [
+        place.subLocality,
+        place.locality,
+        place.administrativeArea,
+        place.postalCode,
+        place.country,
+      ].where((e) => e != null && e.isNotEmpty).join(', ');
+
+      print("FALLBACK ADDRESS: $fallbackAddress");
+
+      return fallbackAddress;
+    } catch (e) {
+      return "Location unavailable";
+    }
+  }
+
+  Future<File?> _stampImage(File file) async {
+    try {
+      //  Get location
+      final position = await _getLocation();
+
+      //  Get address
+      final address = await _getAddress(position.latitude, position.longitude);
+
+      //  Date & Time
+      String date = DateFormat('dd-MM-yyyy').format(DateTime.now());
+      String time = DateFormat('hh:mm a').format(DateTime.now());
+
+      //  Text lines
+      List<String> lines = [
+        "Date: $date  Time: $time",
+        address,
+        "Lat: ${position.latitude}, Lng: ${position.longitude}",
+      ];
+
+      //  Load image
+      final bytes = await file.readAsBytes();
+      img.Image? image = img.decodeImage(bytes);
+      if (image == null) return null;
+
+      final logoBytes = await rootBundle.load('assets/images/logo.png');
+      final logo = img.decodeImage(logoBytes.buffer.asUint8List());
+
+      //  Draw background box
+      int padding = 20;
+      int boxHeight = (lines.length * 50) + 40;
+      int startY = image.height - boxHeight - 20;
+
+      img.fillRect(
+        image,
+        x1: 0,
+        y1: startY,
+        x2: image.width,
+        y2: image.height,
+        color: img.ColorRgba8(0, 0, 0, 180),
+      );
+
+      //  Draw text
+      final font = img.arial24;
+
+      for (int i = 0; i < lines.length; i++) {
+        img.drawString(
+          image,
+          lines[i],
+          font: font,
+          x: padding,
+          y: startY + 10 + (i * 40),
+          color: img.ColorRgb8(255, 255, 255),
+        );
+      }
+
+      //  Add logo (top-right)
+      if (logo != null) {
+        final resizedLogo = img.copyResize(logo, width: image.width ~/ 4);
+
+        img.compositeImage(
+          image,
+          resizedLogo,
+          dstX: image.width - resizedLogo.width - 10,
+          dstY: 10,
+        );
+      }
+
+      //  Save image
+      final dir = await getApplicationDocumentsDirectory();
+      final newPath =
+          '${dir.path}/visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      final newFile = File(newPath)
+        ..writeAsBytesSync(img.encodeJpg(image, quality: 90));
+
+      return newFile;
+    } catch (e) {
+      print("Stamp error: $e");
+      return null;
+    }
+  }
 
   Future<void> _selectReminderDate() async {
     final DateTime? pickedDate = await showDatePicker(
@@ -305,7 +302,6 @@ Future<File?> _stampImage(File file) async {
       });
     }
   }
-
 
   Future<bool> _requestCameraPermission() async {
     final status = await Permission.camera.request();
@@ -339,7 +335,7 @@ Future<File?> _stampImage(File file) async {
                     ),
                   ),
                 ),
-                
+
                 ListTile(
                   leading: const Icon(Icons.camera_front_outlined),
                   title: const Text("Take Photo"),
@@ -363,39 +359,49 @@ Future<File?> _stampImage(File file) async {
     );
   }
 
-
   Future<void> _pickImageFromCamera(CameraDevice cameraDevice) async {
-  final hasPermission = await _requestCameraPermission();
-  if (!hasPermission) return;
+    final hasPermission = await _requestCameraPermission();
+    if (!hasPermission) return;
 
-  try {
-    final XFile? pickedFile = await _picker.pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: cameraDevice,
-      imageQuality: 75,
-    );
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: cameraDevice,
+        imageQuality: 75,
+      );
 
-    if (pickedFile != null) {
-      File original = File(pickedFile.path);
+      if (pickedFile != null) {
+        setState(() {
+          isImageLoading = true; //  START LOADING HERE
+        });
 
-      // Stamp image here
-      File? stamped = await _stampImage(original);
+        File original = File(pickedFile.path);
 
+        //  IMPORTANT: give UI time to rebuild
+        await Future.delayed(const Duration(milliseconds: 50));
+
+        File? stamped = await _stampImage(original);
+
+        if (!mounted) return;
+
+        setState(() {
+          _selectedImage = stamped ?? original;
+          isImageLoading = false; //  STOP LOADING
+        });
+      }
+    } catch (e) {
       setState(() {
-        _selectedImage = stamped ?? original;
+        isImageLoading = false;
       });
+      _showFlushbar("Failed to capture image");
     }
-  } catch (e) {
-    _showFlushbar("Failed to capture image");
   }
-}
 
   void _removeSelectedImage() {
     setState(() {
       _selectedImage = null;
     });
   }
-
 
   Future<void> _handlePincodeChange(String pincode) async {
     if (pincode.length != 6) {
@@ -438,8 +444,6 @@ Future<File?> _stampImage(File file) async {
       }
     }
   }
-
-
 
   Future<void> _fetchCustomers() async {
     if (attendanceType == null || customerType != "Old Customer") return;
@@ -514,101 +518,200 @@ Future<File?> _stampImage(File file) async {
     }
   }
 
+  Future<void> showVisitReminderDialog(int visits) async {
+    int remaining = 4 - visits;
 
-Future<void> _submitForm() async {
-  if (attendanceType == null) {
-    _showFlushbar("Please select attendance type");
-    return;
-  }
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            /// Main Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color.fromARGB(
+                  255,
+                  249,
+                  249,
+                  249,
+                ), // light green background
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  /// Image
+                  Image.asset('assets/images/visit_remaining.png', height: 110),
 
-  if (customerType == null) {
-    _showFlushbar("Please select customer type");
-    return;
-  }
+                  const SizedBox(height: 10),
 
-  if (visitPurpose == null) {
-    _showFlushbar("Please select visit purpose");
-    return;
-  }
+                  /// Title
+                  const Text(
+                    "Visit Reminder",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
 
-  if (customerType == "Old Customer" && selectedCustomerId == null) {
-    _showFlushbar("Please select old customer");
-    return;
-  }
+                  const SizedBox(height: 8),
 
-  //  OPTIONAL (better UX)
-  if (_selectedImage == null) {
-    _showFlushbar("Please upload image");
-    return;
-  }
+                  /// Message
+                  Text(
+                    visits == 0
+                        ? "You haven't started visits yet.\nComplete 4 visits to avoid half day."
+                        : "You have completed $visits visit(s).\nComplete $remaining more to avoid half day.",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14),
+                  ),
 
-  setState(() {
-    isSubmitting = true;
-  });
-print("customerId: $selectedCustomerId");
-  try {
-    final response = await ApiService.uploadVisit(
-      visitType: attendanceType!,
-      customerType: customerType!,
-      customerId: selectedCustomerId,
-      name: nameController.text.trim(),
-      firm_name: firmNameController.text.trim(),
-      firm_address: firmAddressController.text.trim(),
-      contactNumber: contactNumberController.text.trim(),
-      address: addressController.text.trim(),
-      district: districtController.text.trim(),
-      visitPurpose: visitPurpose!,
-      comment: commentController.text.trim(),
-      // reminderDate: reminderDateController.text.trim(),
-      reminderDate: reminderDateController.text.trim().isEmpty
-    ? null
-    : reminderDateController.text.trim(),
-      pincode: pincodeController.text.trim(),
-      area: selectedArea ?? '',
-      image: _selectedImage,
+                  const SizedBox(height: 16),
+
+                  /// Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1B5E20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        "OK",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            ///  Close Icon
+            Positioned(
+              right: 6,
+              top: 6,
+              child: InkWell(
+                onTap: () => Navigator.pop(context),
+                child: const CircleAvatar(
+                  radius: 14,
+                  backgroundColor: Colors.white,
+                  child: Icon(Icons.close, size: 16, color: Colors.black54),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
+  }
 
-    bool success = response["success"];
-    String message = response["message"];
-
-    if (success) {
-      _resetForm();
+  Future<void> _submitForm() async {
+    if (attendanceType == null) {
+      _showFlushbar("Please select attendance type");
+      return;
     }
 
-    _showFlushbar(
-      message,
-      isSuccess: success,
-    );
+    if (customerType == null) {
+      _showFlushbar("Please select customer type");
+      return;
+    }
 
-  } catch (e) {
-    _showFlushbar("Submission failed: $e");
-  } finally {
-    if (mounted) {
-      setState(() {
-        isSubmitting = false;
-      });
+    if (visitPurpose == null) {
+      _showFlushbar("Please select visit purpose");
+      return;
+    }
+
+    if (customerType == "Old Customer" && selectedCustomerId == null) {
+      _showFlushbar("Please select old customer");
+      return;
+    }
+
+    //  OPTIONAL (better UX)
+    if (_selectedImage == null) {
+      _showFlushbar("Please upload image");
+      return;
+    }
+
+    setState(() {
+      isSubmitting = true;
+    });
+    print("customerId: $selectedCustomerId");
+    try {
+      final response = await ApiService.uploadVisit(
+        visitType: attendanceType!,
+        customerType: customerType!,
+        customerId: selectedCustomerId,
+        name: nameController.text.trim(),
+        firm_name: firmNameController.text.trim(),
+        firm_address: firmAddressController.text.trim(),
+        contactNumber: contactNumberController.text.trim(),
+        address: addressController.text.trim(),
+        district: districtController.text.trim(),
+        visitPurpose: visitPurpose!,
+        comment: commentController.text.trim(),
+        // reminderDate: reminderDateController.text.trim(),
+        reminderDate: reminderDateController.text.trim().isEmpty
+            ? null
+            : reminderDateController.text.trim(),
+        pincode: pincodeController.text.trim(),
+        area: selectedArea ?? '',
+        image: _selectedImage,
+      );
+
+      bool success = response["success"];
+      String message = response["message"];
+
+      if (success) {
+        _resetForm();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove("last_notify_time");
+        final token = prefs.getString("token") ?? "";
+
+        final visitRes = await ApiService.getTodayVisitCount(token);
+
+        if (visitRes["success"] == true) {
+          _showFlushbar(message, isSuccess: success);
+
+          if (mounted) {
+            setState(() {
+              isSubmitting = false;
+            });
+          }
+
+          int visits = visitRes["totalVisits"] ?? visitRes["visits"] ?? 0;
+
+          if (visits < 4) {
+            await Future.delayed(const Duration(seconds: 1));
+            await showVisitReminderDialog(visits);
+          }
+        }
+      }
+    } catch (e) {
+      _showFlushbar("Submission failed: $e");
     }
   }
-}
+
   Widget _sectionCard({required String title, required Widget child}) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-  color: Colors.white,
-  borderRadius: BorderRadius.circular(20),
-  border: Border.all(
-    color: const Color(0xFF81C784).withOpacity(0.4), // light green border
-  ),
-  boxShadow: [
-    BoxShadow(
-      color: const Color(0xFF1B5E20).withOpacity(0.08),
-      blurRadius: 8,
-      offset: const Offset(0, 4),
-    ),
-  ],
-),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF81C784).withOpacity(0.4), // light green border
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1B5E20).withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -665,51 +768,52 @@ print("customerId: $selectedCustomerId");
             borderSide: const BorderSide(color: Color(0xFFD9D9D9)),
           ),
           focusedBorder: OutlineInputBorder(
-  borderRadius: BorderRadius.circular(16),
-  borderSide: const BorderSide(
-    color: Color(0xFF1B5E20), // green focus
-    width: 1.5,
-  ),
-),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: Color(0xFF1B5E20), // green focus
+              width: 1.5,
+            ),
+          ),
         ),
       ),
     );
   }
 
- Widget _radioOption({
-  required String value,
-  required String groupValue,
-  required String title,
-  required Function(String?) onChanged,
-}) {
-  return Expanded(
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Transform.scale(
-          scale: 0.9, // reduce radio size (less space)
-          child: Radio<String>(
-            value: value,
-            groupValue: groupValue,
-            onChanged: onChanged,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, //  remove extra padding
-            visualDensity: VisualDensity.compact, // compact spacing
-            activeColor: const Color(0xFF1B5E20),
+  Widget _radioOption({
+    required String value,
+    required String groupValue,
+    required String title,
+    required Function(String?) onChanged,
+  }) {
+    return Expanded(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Transform.scale(
+            scale: 0.9, // reduce radio size (less space)
+            child: Radio<String>(
+              value: value,
+              groupValue: groupValue,
+              onChanged: onChanged,
+              materialTapTargetSize:
+                  MaterialTapTargetSize.shrinkWrap, //  remove extra padding
+              visualDensity: VisualDensity.compact, // compact spacing
+              activeColor: const Color(0xFF1B5E20),
+            ),
           ),
-        ),
-        const SizedBox(width: 2), //  very small gap
-        Expanded(
-          child: Text(
-            title,
-            maxLines: 1, //  force single line
-            overflow: TextOverflow.visible, //  show full text
-            style: const TextStyle(fontSize: 13),
+          const SizedBox(width: 2), //  very small gap
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1, //  force single line
+              overflow: TextOverflow.visible, //  show full text
+              style: const TextStyle(fontSize: 13),
+            ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   InputDecoration _dropdownDecoration() {
     return InputDecoration(
@@ -726,12 +830,9 @@ print("customerId: $selectedCustomerId");
         borderSide: const BorderSide(color: Color(0xFFD9D9D9)),
       ),
       focusedBorder: OutlineInputBorder(
-  borderRadius: BorderRadius.circular(16),
-  borderSide: const BorderSide(
-    color: Color(0xFF1B5E20),
-    width: 1.5,
-  ),
-),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF1B5E20), width: 1.5),
+      ),
     );
   }
 
@@ -751,15 +852,17 @@ print("customerId: $selectedCustomerId");
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: const Color(0xFFD9D9D9)),
               ),
-              child: _selectedImage == null
+              child: isImageLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _selectedImage == null
                   ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-          Image.asset(
-            "assets/images/mirrorless.png",
-            height: 80,
-            width: 80,
-          ),
+                        Image.asset(
+                          "assets/images/mirrorless.png",
+                          height: 80,
+                          width: 80,
+                        ),
                         SizedBox(height: 10),
                         Text(
                           "Tap to Upload Image",
@@ -778,7 +881,6 @@ print("customerId: $selectedCustomerId");
                     ),
             ),
           ),
-       
         ],
       ),
     );
@@ -789,11 +891,13 @@ print("customerId: $selectedCustomerId");
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 241, 241, 241),
       appBar: AppBar(
-        title: const Text("Employee Visit",
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),),
+        title: const Text(
+          "Employee Visit",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
         backgroundColor: const Color.fromARGB(255, 253, 254, 255),
-        
+
         elevation: 0,
       ),
       body: SafeArea(
@@ -801,27 +905,6 @@ print("customerId: $selectedCustomerId");
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // Container(
-              //   width: double.infinity,
-              //   padding: const EdgeInsets.symmetric(vertical: 24),
-              //   margin: const EdgeInsets.only(bottom: 18),
-              //   decoration: BoxDecoration(
-              //     color: Colors.white,
-              //     borderRadius: BorderRadius.circular(22),
-              //   ),
-              //   child: const Center(
-              //     child: Text(
-              //       "Employee Visit",
-              //       style: TextStyle(
-              //         fontSize: 28,
-              //         fontWeight: FontWeight.bold,
-              //         color: Color(0xFF3047B0),
-              //       ),
-              //     ),
-              //   ),
-              // ),
-
-              // Visit Type
               _sectionCard(
                 title: "Visit Type",
                 child: Row(
@@ -1077,7 +1160,6 @@ print("customerId: $selectedCustomerId");
                       decoration: _dropdownDecoration(),
                       hint: const Text("Select Visit Purpose"),
                       items: const [
-                        DropdownMenuItem(value: "Order", child: Text("Order")),
                         DropdownMenuItem(
                           value: "new_dist_planning",
                           child: Text("New Distributor Planning"),
@@ -1131,7 +1213,12 @@ print("customerId: $selectedCustomerId");
                       child: ElevatedButton(
                         onPressed: _resetForm,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color.fromARGB(255, 217, 54, 54),
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            217,
+                            54,
+                            54,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),

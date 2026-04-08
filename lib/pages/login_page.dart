@@ -31,19 +31,19 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     _loadSavedCredentials();
-     if (widget.message != null) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Flushbar(
-        message: widget.message!,
-        duration: const Duration(seconds: 2),
-        flushbarPosition: FlushbarPosition.TOP,
-        backgroundColor: Colors.green,
-        margin: const EdgeInsets.all(20),
-        borderRadius: BorderRadius.circular(8),
-        icon: const Icon(Icons.check_circle, color: Colors.white),
-      ).show(context);
-    });
-  }
+    if (widget.message != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Flushbar(
+          message: widget.message!,
+          duration: const Duration(seconds: 2),
+          flushbarPosition: FlushbarPosition.TOP,
+          backgroundColor: Colors.green,
+          margin: const EdgeInsets.all(20),
+          borderRadius: BorderRadius.circular(8),
+          icon: const Icon(Icons.check_circle, color: Colors.white),
+        ).show(context);
+      });
+    }
   }
 
   Future<void> _loadSavedCredentials() async {
@@ -107,23 +107,12 @@ class _LoginPageState extends State<LoginPage> {
           value: _passwordController.text.trim(),
         );
 
-        // Navigator.pushAndRemoveUntil(
-        //   context,
-        //   MaterialPageRoute(
-        //     builder: (context) =>
-        //         MainScreen(employeeId: employeeId, token: token),
-        //   ),
-        //    (route) => false,
-        // );
-Navigator.pushNamedAndRemoveUntil(
-  context,
-  AppRoutes.appRouter,
-  (route) => false,
-  arguments: {
-    "employeeId": employeeId,
-    "token": token,
-  },
-);
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.appRouter,
+          (route) => false,
+          arguments: {"employeeId": employeeId, "token": token},
+        );
         await StorageService.saveUser(token, employeeId);
         await Flushbar(
           message: "Login Successful",
@@ -134,6 +123,7 @@ Navigator.pushNamedAndRemoveUntil(
           borderRadius: BorderRadius.circular(8),
           icon: const Icon(Icons.check_circle, color: Colors.white),
         ).show(context);
+
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(response['message'] ?? 'Login failed')),

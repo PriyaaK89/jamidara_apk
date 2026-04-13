@@ -20,5 +20,7 @@ class Endpoints {
   static const String updateUserStatus = '/auth/update-status';
   static const String sendForAadharKYC = '/digilocker-kyc';
   static const String getDetailsFromAadhar = '/kyc-status';
+  static const String getMe = '/auth/my-profile';
+  static const String updateProfileImage = '/auth/upload-profile-image';
 
 }

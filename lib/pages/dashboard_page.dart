@@ -4,7 +4,6 @@ import '../services/api_service.dart';
 
 class DashboardPage extends StatefulWidget {
   final int employeeId;
-
   const DashboardPage({super.key, required this.employeeId});
 
   @override
@@ -12,16 +11,38 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-
+Map<String, dynamic>? profile;
+bool isLoadingProfile = true;
   @override
   void initState() {
     super.initState();
 
-    /// Run after UI loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkVisitReminder();
+       _loadProfile();
     });
   }
+
+  Future<void> _loadProfile() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token") ?? "";
+
+    final res = await ApiService.getMyProfile(token);
+
+    if (res["success"] == true) {
+      setState(() {
+        profile = res["data"];
+        isLoadingProfile = false;
+      });
+    } else {
+      setState(() => isLoadingProfile = false);
+    }
+  } catch (e) {
+    debugPrint("Profile error: $e");
+    setState(() => isLoadingProfile = false);
+  }
+}
 
   ///  API Call to check today's visits
   Future<void> _checkVisitReminder() async {
@@ -33,11 +54,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
       if (visitRes["success"] == true) {
         int visits = visitRes["totalVisits"] ?? visitRes["visits"] ?? 0;
-
-
         if (visits < 4) {
           await _showVisitReminderDialog(visits);
-         
         }
       }
     } catch (e) {
@@ -59,20 +77,12 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
       child: Stack(
         children: [
-
-          /// Main Content
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-
-                /// Image
-                Image.asset(
-                  'assets/images/visit_remaining.png',
-                  height: 120,
-                ),
-
+                Image.asset( 'assets/images/visit_remaining.png', height: 120,),
                 const SizedBox(height: 12),
 
                 /// Title
@@ -144,24 +154,29 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
 
           /// Greeting Card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1B5E20), Color(0xFF66BB6A)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Text(
-              "Welcome Back 👋\nHave a productive day!",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+         Container(
+  width: double.infinity,
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    gradient: const LinearGradient(
+      colors: [Color(0xFF1B5E20), Color(0xFF66BB6A)],
+    ),
+    borderRadius: BorderRadius.circular(16),
+  ),
+  child: isLoadingProfile
+      ? const Text(
+          "Loading...",
+          style: TextStyle(color: Colors.white),
+        )
+      : Text(
+          "Welcome Back ${profile?['name'] ?? ''} 👋\nHave a productive day",
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
+        ),
+),
 
           const SizedBox(height: 20),
 
@@ -196,7 +211,6 @@ class _DashboardPageState extends State<DashboardPage> {
 class _StatCard extends StatelessWidget {
   final String title;
   final String value;
-
   const _StatCard({required this.title, required this.value});
 
   @override
@@ -214,18 +228,9 @@ class _StatCard extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text( value, style: const TextStyle( fontSize: 18, fontWeight: FontWeight.bold, ), ),
           const SizedBox(height: 4),
-          Text(
-            title,
-            style: const TextStyle(color: Colors.grey),
-          ),
+          Text( title, style: const TextStyle(color: Colors.grey), ),
         ],
       ),
     );

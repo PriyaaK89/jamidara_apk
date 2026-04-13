@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../pages/profile_menu_page.dart';
+import '../services/api_service.dart';
+import '../services/user_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MainLayout extends StatefulWidget {
   final Widget child;
@@ -22,6 +25,12 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
 
+  @override
+void initState() {
+  super.initState();
+  _loadUserProfile();
+}
+
   void _openProfileMenu() {
     Navigator.push(
       context,
@@ -32,6 +41,42 @@ class _MainLayoutState extends State<MainLayout> {
       ),
     );
   }
+
+  Widget _buildInitialAvatar(String name) {
+  return Container(
+    color: Colors.white,
+    alignment: Alignment.center,
+    child: Text(
+      name.isNotEmpty ? name[0].toUpperCase() : '',
+      style: const TextStyle(
+        color: Color(0xFF1B5E20),
+        fontWeight: FontWeight.bold,
+        fontSize: 18,
+      ),
+    ),
+  );
+}
+
+  Future<void> _loadUserProfile() async {
+  try {
+    if (UserService.user != null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token") ?? "";
+
+    if (token.isEmpty) return;
+
+    final res = await ApiService.getMyProfile(token);
+
+    if (res["success"] == true) {
+      UserService.setUser(res["data"]);
+    } else {
+      debugPrint("Profile API failed");
+    }
+  } catch (e) {
+    debugPrint("Profile load error: $e");
+  }
+}
 
   Widget _buildHeader() {
     return Container(
@@ -85,13 +130,39 @@ class _MainLayoutState extends State<MainLayout> {
               width: 42,
               height: 42,
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: Color.fromARGB(255, 254, 255, 255),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.person,
-                color: Color(0xFF1B5E20),
-              ),
+              child: ValueListenableBuilder<Map<String, dynamic>?>(
+  valueListenable: UserService.currentUser,
+  builder: (context, user, _) {
+    final imageUrl = user?['profile_image_url'];
+    final name = user?['name'] ?? '';
+
+    return InkWell(
+      onTap: _openProfileMenu,
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+        ),
+        child: ClipOval(
+          child: (imageUrl != null && imageUrl.isNotEmpty)
+              ? Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return _buildInitialAvatar(name);
+                  },
+                )
+              : _buildInitialAvatar(name),
+        ),
+      ),
+    );
+  },
+),
             ),
           ),
         ],
@@ -173,26 +244,11 @@ if (widget.currentRoute == "salary_report") {
           unselectedItemColor: Colors.grey,
           showUnselectedLabels: true,
           items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard),
-              label: "Dashboard",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.fingerprint),
-              label: "Attendance",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.location_on),
-              label: "Visit",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.shopping_cart),
-              label: "Order",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.more_horiz),
-              label: "More",
-            ),
+            BottomNavigationBarItem( icon: Icon(Icons.dashboard), label: "Dashboard",),
+            BottomNavigationBarItem( icon: Icon(Icons.fingerprint), label: "Attendance",),
+            BottomNavigationBarItem( icon: Icon(Icons.location_on), label: "Visit",),
+            BottomNavigationBarItem( icon: Icon(Icons.shopping_cart), label: "Order", ),
+            BottomNavigationBarItem( icon: Icon(Icons.more_horiz), label: "More",),
           ],
         ),
       ),

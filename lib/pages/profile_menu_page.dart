@@ -3,14 +3,13 @@ import 'package:flutter_application_2/services/storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'login_page.dart';
-import '../pages/EmpProfile/visit_report_page.dart';
-import '../pages/main_screen.dart';
 import '../layout/app_router.dart';
-import '../pages/EmpProfile/attendance_report_page.dart';
-import '../pages/EmpProfile/salary_report_page.dart';
-import '../pages/profile_page.dart';
+import '../services/user_service.dart';
+import '../services/api_service.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
-class ProfileMenuPage extends StatelessWidget {
+class ProfileMenuPage extends StatefulWidget {
   final bool clearSavedCredentialsOnLogout;
   final Function(int)? onTabChange;
 
@@ -20,6 +19,80 @@ class ProfileMenuPage extends StatelessWidget {
     this.onTabChange,
   });
 
+  @override
+  State<ProfileMenuPage> createState() => _ProfileMenuPageState();
+}
+
+class _ProfileMenuPageState extends State<ProfileMenuPage> {
+  File? selectedImage;
+
+Future<void> _pickImage() async {
+  final picker = ImagePicker();
+  final picked = await picker.pickImage(source: ImageSource.gallery);
+
+  if (picked != null) {
+    selectedImage = File(picked.path);
+    _showConfirmDialog();
+  }
+}
+
+  Future<void> _showConfirmDialog() async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Update Profile"),
+      content: const Text("Are you sure you want to update profile image?"),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text("Yes"),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm == true && selectedImage != null) {
+    await _uploadImage();
+  }
+}
+
+  Future<void> _uploadImage() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token") ?? "";
+
+    final res = await ApiService.updateMyProfile(token, selectedImage!);
+
+    if (res["success"] == true) {
+      /// 🔥 IMPORTANT FIX HERE
+      final currentUser = UserService.user;
+
+      if (currentUser != null) {
+        UserService.setUser({
+          ...currentUser,
+          "profile_image_url": res["profile_image"], // update image only
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Profile updated successfully")),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res["message"] ?? "Upload failed")),
+      );
+    }
+  } catch (e) {
+    debugPrint("Upload error: $e");
+  }
+}
+
   Future<void> _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     const secureStorage = FlutterSecureStorage();
@@ -28,8 +101,10 @@ class ProfileMenuPage extends StatelessWidget {
     await prefs.remove('token');
     await prefs.remove('employee_id');
 
+    UserService.clearUser();
+
     // if you want to clear email/password too, set this true
-    if (clearSavedCredentialsOnLogout) {
+    if (widget.clearSavedCredentialsOnLogout) {
       await prefs.remove('saved_email');
       await secureStorage.delete(key: 'saved_password');
     }
@@ -44,6 +119,21 @@ class ProfileMenuPage extends StatelessWidget {
         ),
       ),
       (route) => false,
+    );
+  }
+
+  Widget _buildInitialAvatar(String name) {
+    return Container(
+      alignment: Alignment.center,
+      color: Colors.white,
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : '',
+        style: const TextStyle(
+          color: Color(0xFF1B5E20),
+          fontWeight: FontWeight.bold,
+          fontSize: 20,
+        ),
+      ),
     );
   }
 
@@ -111,6 +201,16 @@ class ProfileMenuPage extends StatelessWidget {
     }
   }
 
+  void _showFullImage(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty) return;
+
+    showDialog(
+      context: context,
+      builder: (context) =>
+          Dialog(child: InteractiveViewer(child: Image.network(imageUrl))),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -127,51 +227,106 @@ class ProfileMenuPage extends StatelessWidget {
           child: Column(
             children: [
               // top employee card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1B5E20), Color(0xFF43A047)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Row(
-                  children: const [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Colors.white,
-                      child: Icon(
-                        Icons.person,
-                        size: 32,
-                        color: Color(0xFF1B5E20),
+              ValueListenableBuilder<Map<String, dynamic>?>(
+                valueListenable: UserService.currentUser,
+                builder: (context, user, _) {
+                  final name = user?['name'] ?? 'User';
+                  final jobRole = user?['job_role_name'] ?? '';
+                  final imageUrl = user?['profile_image_url'];
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1B5E20), Color(0xFF43A047)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                    SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Marketing Employee',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                    child: Row(
+                      children: [
+                        ///  Profile Avatar
+                        Stack(
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                _showFullImage(imageUrl);
+                              },
+                              child: CircleAvatar(
+                                radius: 28,
+                                backgroundColor: Colors.white,
+                                child: ClipOval(
+                                  child:
+                                      (imageUrl != null && imageUrl.isNotEmpty)
+                                      ? Image.network(
+                                          imageUrl,
+                                          width: 56,
+                                          height: 56,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                                return _buildInitialAvatar(
+                                                  name,
+                                                );
+                                              },
+                                        )
+                                      : _buildInitialAvatar(name),
+                                ),
+                              ),
                             ),
+
+                            /// 📸 Camera Icon
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: _pickImage,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF1B5E20),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(width: 14),
+
+                        ///  Name + Role
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                jobRole,
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                            ],
                           ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Jamidara Seeds Corporation',
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
 
               const SizedBox(height: 18),

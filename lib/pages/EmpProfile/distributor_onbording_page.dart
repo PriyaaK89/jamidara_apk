@@ -76,9 +76,10 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
   final annualTurnover = TextEditingController();
   final creditdurationperiod = TextEditingController();
   final securityamount = TextEditingController();
+  final creditAmount = TextEditingController();
   final expectedsaleperyear = TextEditingController();
   final sourceDetailsController = TextEditingController();
-  final juridictionArea = TextEditingController();
+  // final juridictionArea = TextEditingController();
 
   /// Dropdowns
   String firmType = "";
@@ -94,6 +95,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
   String _kycStatus = ""; // "", "sending", "pending", "completed", "failed"
   Timer? _kycPollingTimer;
   Timer? _kycTimeoutTimer;
+  bool isGstVerified = false;
 
   String? requiredValidator(String? value, {String field = "Field"}) {
     if (!isSubmitted) return null;
@@ -298,6 +300,19 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
       final dob = aadhaar["dob"]?.toString() ?? "";
 
       if (dob.isNotEmpty && customerDOB.text.isEmpty) customerDOB.text = dob;
+
+        if (firmType.toLowerCase() == "proprietorship") {
+      if (name.isNotEmpty) ownerName.text = name;
+      if (address.isNotEmpty) ownerAddress.text = address;
+      if (mobile.isNotEmpty) ownerMobile.text = mobile;
+
+      // Optional fields (if available in API)
+      final fatherName = aadhaar["father_name"]?.toString() ?? "";
+      if (fatherName.isNotEmpty) ownerFather.text = fatherName;
+
+      final pincode = aadhaar["pincode"]?.toString() ?? "";
+      if (pincode.isNotEmpty) ownerPincode.text = pincode;
+    }
     });
   }
 
@@ -357,8 +372,18 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
         gstStatus = "not_verified";
       }
     });
+    
 
     if (response["success"] == true) {
+      setState(() {
+  if (response["success"] == true && status == "active") {
+    gstStatus = "verified";
+    isGstVerified = true;   //  lock fields
+  } else {
+    gstStatus = "not_verified";
+    isGstVerified = false;  //  allow editing
+  }
+});
       setState(() {
         final address = response["address"] ?? {};
 
@@ -506,7 +531,6 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
     }
 
     final data = {
-      //  BASIC
       "customer_name": customerName.text,
       "customer_dob": customerDOB.text,
       "firm_name": firmName.text,
@@ -514,7 +538,6 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
       "gst_type": gstType.toLowerCase(),
       "firm_type": firmType.toLowerCase(),
 
-      //  BUSINESS
       "business_address": businessAddress.text,
       "business_territory": bussinessterritory.text,
       "state": bussinesstate.text,
@@ -527,53 +550,45 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
       "contact_number": bussinesscontact.text,
       "alt_contact_number": bussinessaltcontact.text,
 
-      //  RESPONSIBLE PERSON
       "responsible_person_name": responsiblePersonName.text,
       "responsible_person_contact": responsiblePersonMobile.text,
       "responsible_person_address": responsiblePersonAddress.text,
       "responsible_person_alt_contact": responsiblePersonAltMobile.text,
 
-      //  FIRM DETAILS
       "firm_email": firmEmail.text,
       "firm_pan": firmPan.text,
      
       "firm_since": firmsince.text,
       "branch": branch.text,
 
-      //  LICENSE
       "seed_license_no": seedLicenseNumber.text,
       "seed_license_expiry": seedLicenseExpiry.text,
       "fertilizer_license_no": fertilizerLicenseNumber.text,
       "pesticide_license_no": pesticideLicenseNumber.text,
 
-      //  TRANSPORT
       "transport_name_a": transportAgency1Name.text,
       "transport_name_b": transportAgency2Name.text,
 
-      //  BANK
       "bank_name": firmbankName.text,
       "bank_account_no": firmbankAccountNumber.text,
       "ifsc_code": firmbankIfsc.text,
       "bank_branch": firmbankBranch.text,
 
-      //  CHEQUE
       "security_cheque_no": cheque1Number.text,
       "security_cheque_no_2": cheque2Number.text,
       "security_amount": securityamount.text,
+      "credit_amount": creditAmount.text,
 
-      //  BUSINESS FINANCE
       "source_of_funds": sourceOfFunds,
       "own_funds_details": sourceDetailsController.text,
 
       "annual_turnover": annualTurnover.text,
       "credit_duration": creditdurationperiod.text,
       "expected_sale": expectedsaleperyear.text,
-
-      //  APPROVAL
       "approver_name": approverName.text,
       "approving_date": approvingDate.text,
 
-      "jurisdiction_area": juridictionArea.text,
+      // "jurisdiction_area": juridictionArea.text,
     };
     if (firmType == "proprietorship") {
       if (ownerName.text.isEmpty ||
@@ -641,9 +656,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
       token: token,
       data: data,
       // partners: firmType == "partnership" ? partnerList : null,
-      partners: (firmType == "partnership" && partnerList.isNotEmpty)
-          ? partnerList
-          : null,
+      partners: (firmType == "partnership" && partnerList.isNotEmpty) ? partnerList : null,
       companies: companyList,
       files: files,
     );
@@ -752,10 +765,11 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
       cheque2Number,
       annualTurnover,
       creditdurationperiod,
+      creditAmount,
       securityamount,
       expectedsaleperyear,
       sourceDetailsController,
-      juridictionArea,
+    
       ownerName,
       ownerFather,
       ownerPan,
@@ -1200,7 +1214,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: firmsince,
-                      readOnly: true,
+                     readOnly: isGstVerified,
                       decoration: AppInputDecoration.input("Firm Since (Year)"),
                       validator: (v) =>
                           requiredValidator(v, field: "Firm Since"),
@@ -1211,7 +1225,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     TextFormField(
                       controller: customerName,
-                      readOnly: true,
+                      readOnly: isGstVerified,
                       decoration: AppInputDecoration.input("Customer Name"),
                       validator: (v) =>
                           requiredValidator(v, field: "Customer Name"),
@@ -1221,7 +1235,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     /// FIRM NAME
                     TextFormField(
                       controller: firmName,
-                      readOnly: true,
+                      readOnly: isGstVerified,
                       decoration: AppInputDecoration.input("Firm Name"),
                       validator: (v) =>
                           requiredValidator(v, field: "Firm Name"),
@@ -1291,7 +1305,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     /// BUSINESS ADDRESS
                     TextFormField(
                       controller: businessAddress,
-                      readOnly: true,
+                     readOnly: isGstVerified,
                       decoration: AppInputDecoration.input("Business Address"),
                       validator: (v) =>
                           requiredValidator(v, field: "Business Address"),
@@ -1315,28 +1329,28 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinesstehsil,
-                      readOnly: true,
+                      readOnly: isGstVerified,
                       decoration: AppInputDecoration.input("Tehsil"),
                       validator: (v) => requiredValidator(v, field: "Tehsil"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinesstate,
-                      readOnly: true,
+                      readOnly: isGstVerified,
                       decoration: AppInputDecoration.input("State"),
                       validator: (v) => requiredValidator(v, field: "State"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinessdistrict,
-                      readOnly: true,
+                     readOnly: isGstVerified,
                       decoration: AppInputDecoration.input("District"),
                       validator: (v) => requiredValidator(v, field: "District"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinesspincode,
-                      readOnly: true,
+                     readOnly: isGstVerified,
                       decoration: AppInputDecoration.input("Pincode"),
                       validator: (v) => requiredValidator(v, field: "Pincode"),
                     ),
@@ -1391,13 +1405,13 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                           requiredValidator(v, field: "Firm Landmark"),
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
-                      controller: juridictionArea,
-                      decoration: AppInputDecoration.input("Juridiction Area"),
-                      validator: (v) =>
-                          requiredValidator(v, field: "Juridiction Area"),
-                    ),
-                    const SizedBox(height: 12),
+                    // TextFormField(
+                    //   controller: juridictionArea,
+                    //   decoration: AppInputDecoration.input("Juridiction Area"),
+                    //   validator: (v) =>
+                    //       requiredValidator(v, field: "Juridiction Area"),
+                    // ),
+                    // const SizedBox(height: 12),
 
 
                     if (firmType == "proprietorship") ...[
@@ -1789,6 +1803,13 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
+                      TextFormField(
+                      controller: creditAmount,
+                      decoration: AppInputDecoration.input("CC/OD"),
+                      validator: (v) =>
+                          requiredValidator(v, field: "CC/OD Amount"),
+                    ),
+                    const SizedBox(height: 12),
                     TextFormField(
                       controller: securityamount,
                       decoration: AppInputDecoration.input("Security Amount"),
@@ -1895,10 +1916,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                       decoration: AppInputDecoration.input(
                         "Pesticide License Number",
                       ),
-                      validator: (v) => requiredValidator(
-                        v,
-                        field: "Pesticide License Number",
-                      ),
+                  
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -2100,56 +2118,25 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                             onPressed: () {
                               showDialog(
                                 context: context,
-                                builder: (_) => AgreementPreviewModal(
-                                  customerName: customerName.text,
-                                  firmName: firmName.text,
-                                  address: businessAddress.text,
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.preview, size: 20),
-                            label: const Text("Preview"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Color.fromARGB(
-                                255,
-                                88,
-                                164,
-                                150,
-                              ),
-                              elevation: 3,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: const BorderSide(
-                                  color: Color.fromARGB(255, 88, 164, 150),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              showDialog(
-                                context: context,
                                 builder: (_) => DistributorAgreementModal(
                                   customerName: customerName.text,
                                   firmName: firmName.text,
                                   businessAddress: businessAddress.text,
                                   firmType: firmType,
                                   bussinessdistrict: bussinessdistrict.text,
+                                  bussinessterritory: bussinessterritory.text,
                                   securityamount: securityamount.text,
                                   creditdurationperiod:
                                       creditdurationperiod.text,
-                                  juridictionArea: juridictionArea.text,
+                                  
                                   partners: partners,
                                   ownerName: ownerName.text,
                                   ownerAadhar: ownerAadhar.text,
                                   ownerAddress: ownerAddress.text,
+                                  ownerState: ownerState.text,
+                                  ownerDistrict: ownerDistrict.text,
+                                  ownerTehsil: ownerTehsil.text,
+                                  ownerPincode: ownerPincode.text,
                                   ownerMobile: ownerMobile.text,
                                   seedLicenceNo: seedLicenseNumber.text,
                                   fertilizerLicenceNo:
@@ -2165,14 +2152,9 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                               );
                             },
                             icon: const Icon(Icons.description, size: 20),
-                            label: const Text("Generate"),
+                            label: const Text("Generate Agreement Letter"),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color.fromARGB(
-                                255,
-                                88,
-                                164,
-                                150,
-                              ),
+                              backgroundColor: const Color.fromARGB(255, 54, 128, 165),
                               foregroundColor: Colors.white,
                               elevation: 4,
                               padding: const EdgeInsets.symmetric(vertical: 14),

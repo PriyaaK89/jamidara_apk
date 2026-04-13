@@ -89,17 +89,13 @@ class _LoginPageState extends State<LoginPage> {
         final token = response['token'];
         final employeeId = response['user']['id'];
 
-        final service = FlutterBackgroundService();
-        if (await service.isRunning()) {
-          service.invoke("stopService");
-        }
-
         final prefs = await SharedPreferences.getInstance();
 
         // login session save
         await prefs.setString('token', token);
         await prefs.setInt('employee_id', employeeId);
-
+        await prefs.reload();
+print("LOGIN SAVED → ID: $employeeId, TOKEN: $token");
         // last entered credentials save
         await prefs.setString('saved_email', _emailController.text.trim());
         await _secureStorage.write(

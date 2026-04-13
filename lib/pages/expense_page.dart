@@ -287,8 +287,9 @@ Future<File?> _stampImage(File file) async {
     });
 
     try {
-      String formattedDate =
-          "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
+      // String formattedDate = "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
+      String formattedDate = DateTime.now().toIso8601String();
+      print("formatted date in bills $formattedDate");
       final result = await ApiService.uploadExpense(
         expenseType: widget.expenseType,
         expenseDate: formattedDate,

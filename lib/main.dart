@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +16,39 @@ import 'package:http/http.dart' as http;
 import './services/db_helper.dart';
 import './services/status_service.dart';
 
+// ─── Top-level cached credentials (safe in background isolate) ───────────────
+int? _cachedEmployeeId;
+String? _cachedToken;
+
+// ─── Track active stream subscription so we can cancel & restart it ──────────
+StreamSubscription<Position>? _locationSubscription;
+
+// ─── How many consecutive stream errors before we give up & restart ───────────
+int _streamErrorCount = 0;
+const int _maxStreamErrors = 3;
+
+Future<void> _loadCredentials() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
+  _cachedEmployeeId = prefs.getInt('employee_id');
+  _cachedToken = prefs.getString('token');
+
+  print("BACKGROUND LOAD → ID: $_cachedEmployeeId");
+  print("BACKGROUND LOAD → TOKEN: $_cachedToken");
+
+  if (_cachedEmployeeId == null || _cachedToken == null) {
+    print("Retrying credential load in 2s...");
+    await Future.delayed(const Duration(seconds: 2));
+
+    await prefs.reload();
+    _cachedEmployeeId = prefs.getInt('employee_id');
+    _cachedToken = prefs.getString('token');
+
+    print("RETRY LOAD → ID: $_cachedEmployeeId");
+    print("RETRY LOAD → TOKEN: $_cachedToken");
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -30,16 +62,49 @@ void main() async {
     await Permission.notification.request();
   }
 
+  if (await Permission.locationAlways.isDenied) {
+    await Permission.locationAlways.request();
+  }
+
+  if (await Permission.ignoreBatteryOptimizations.isDenied) {
+    await Permission.ignoreBatteryOptimizations.request();
+  }
+
   await initializeService();
+
+  // FIX: On app start, check if the user was previously marked "present"
+  // but the service is not running (e.g. app was killed). If so, restart
+  // the service so location tracking resumes automatically.
+  await _resumeServiceIfNeeded();
+
   runApp(const MyApp());
 }
-// bool isServiceRunning = false;
 
+// ─── Resume service if user is still "checked in" ────────────────────────────
+// This handles the case where the app/phone was restarted after marking
+// "present" but before marking "day_over". Without this, location tracking
+// would silently stop until the user reopens and re-submits attendance.
+Future<void> _resumeServiceIfNeeded() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
+
+  final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
+
+  if (!isCheckedIn) return;
+
+  final service = FlutterBackgroundService();
+  final running = await service.isRunning();
+
+  if (!running) {
+    print("User is checked in but service is not running — restarting...");
+    await service.startService();
+  }
+}
+
+// ─── Service initialisation ───────────────────────────────────────────────────
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
 
-
-  //  CHANNEL 1 (Foreground service)
   const AndroidNotificationChannel locationChannel = AndroidNotificationChannel(
     'location_channel',
     'Location Tracking',
@@ -47,7 +112,6 @@ Future<void> initializeService() async {
     importance: Importance.low,
   );
 
-  //  CHANNEL 2 (Visit reminder)
   const AndroidNotificationChannel visitChannel = AndroidNotificationChannel(
     'visit_channel_v2',
     'Visit Reminder',
@@ -72,49 +136,104 @@ Future<void> initializeService() async {
         AndroidFlutterLocalNotificationsPlugin
       >();
 
-  //  REGISTER BOTH CHANNELS (THIS WAS YOUR MISTAKE)
   await androidPlugin?.createNotificationChannel(locationChannel);
   await androidPlugin?.createNotificationChannel(visitChannel);
 
-  //  SERVICE CONFIG
   await service.configure(
     androidConfiguration: AndroidConfiguration(
       onStart: onStart,
       autoStart: false,
       isForegroundMode: true,
-      notificationChannelId: 'location_channel', //  foreground uses this
+      notificationChannelId: 'location_channel',
       foregroundServiceNotificationId: 1001,
       initialNotificationTitle: 'Tracking Active',
       initialNotificationContent: 'Preparing location service...',
+      foregroundServiceTypes: const [AndroidForegroundType.location],
     ),
     iosConfiguration: IosConfiguration(),
   );
 }
 
+// ─── GPS stream — cancels & restarts safely on error ─────────────────────────
+void _startLocationStream(ServiceInstance service) {
+  _locationSubscription?.cancel();
+  _locationSubscription = null;
+  _streamErrorCount = 0;
+
+  print("Starting GPS location stream...");
+
+  _locationSubscription = Geolocator.getPositionStream(
+    locationSettings: AndroidSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 0,
+      intervalDuration: const Duration(seconds: 30),
+      foregroundNotificationConfig: const ForegroundNotificationConfig(
+        notificationText: "Tracking your location",
+        notificationTitle: "Location Active",
+        enableWakeLock: true,
+        setOngoing: true,
+      ),
+    ),
+  ).listen(
+    (Position position) async {
+      _streamErrorCount = 0;
+      print("LOCATION: ${DateTime.now()}");
+      await sendLocationFromStream(service, position);
+    },
+    onError: (error) {
+      _streamErrorCount++;
+      print("Stream error ($_streamErrorCount/$_maxStreamErrors): $error");
+
+      if (_streamErrorCount >= _maxStreamErrors) {
+        print("Max stream errors reached. Restarting stream in 30s...");
+        _locationSubscription?.cancel();
+        _locationSubscription = null;
+        Future.delayed(const Duration(seconds: 30), () {
+          _startLocationStream(service);
+        });
+      }
+    },
+    cancelOnError: false,
+  );
+}
+
+// ─── Send location to API ─────────────────────────────────────────────────────
 Future<void> sendLocationFromStream(
+  
   ServiceInstance service,
   Position position,
 ) async {
   try {
+    
     final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
+final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
 
-    final employeeId = prefs.getInt('employee_id');
-    final token = prefs.getString('token');
+if (!isCheckedIn) {
+  print("LOCATION SKIPPED: User not checked in");
+  return;
+}
+    final employeeId = _cachedEmployeeId;
+    final token = _cachedToken;
 
-    if (employeeId == null || token == null || token.isEmpty) return;
-
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
-
-    var permission = await Geolocator.checkPermission();
-
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
+    if (employeeId == null) {
+      print("LOCATION SKIPPED: employeeId is null");
+      return;
+    }
+    if (token == null || token.isEmpty) {
+      print("LOCATION SKIPPED: token is null or empty");
+      return;
     }
 
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      print("LOCATION SKIPPED: Location service is disabled on device");
+      return;
+    }
+
+    final permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
+      print("LOCATION SKIPPED: Location permission is $permission");
       return;
     }
 
@@ -136,9 +255,9 @@ Future<void> sendLocationFromStream(
         print("LOCATION API RESPONSE: $response");
 
         if (response != null && response['success'] == true) {
-          break; //  IMPORTANT: don't return, break loop
+          break;
         } else {
-          throw Exception("API failed");
+          throw Exception("API returned failure: $response");
         }
       } catch (e) {
         retryCount++;
@@ -146,7 +265,7 @@ Future<void> sendLocationFromStream(
 
         if (retryCount > maxRetries) {
           allFailed = true;
-          print(" All retries failed → saving locally");
+          print("All retries failed → saving locally");
           await saveLocationLocally(position);
         } else {
           await Future.delayed(const Duration(seconds: 5));
@@ -154,15 +273,15 @@ Future<void> sendLocationFromStream(
       }
     }
 
-    //  ADD HERE (THIS IS THE CORRECT PLACE)
     if (!allFailed) {
       await resendPendingIfNeeded(employeeId, token);
     }
   } catch (e) {
-    print("Stream Location error: $e");
+    print("sendLocationFromStream error: $e");
   }
 }
 
+// ─── SQLite helpers ───────────────────────────────────────────────────────────
 Future<void> saveLocationLocally(Position position) async {
   await DBHelper.insertLocation({
     'latitude': position.latitude,
@@ -171,15 +290,14 @@ Future<void> saveLocationLocally(Position position) async {
     'speed': position.speed,
     'timestamp': DateTime.now().toIso8601String(),
   });
-  print(" Saved to SQLite");
+  print("Saved to SQLite");
 }
 
 Future<void> resendPendingLocations(int employeeId, String token) async {
   final locations = await DBHelper.getLocations();
-
   if (locations.isEmpty) return;
 
-  print("Resending ${locations.length} locations");
+  print("Resending ${locations.length} pending locations");
 
   for (var loc in locations) {
     try {
@@ -193,30 +311,27 @@ Future<void> resendPendingLocations(int employeeId, String token) async {
       );
 
       if (response != null && response['success'] == true) {
-        await DBHelper.deleteLocation(loc['id']); //  delete after success
+        await DBHelper.deleteLocation(loc['id']);
       }
     } catch (e) {
-      print("Retry failed: $e");
+      print("Pending resend failed: $e");
+      break;
     }
   }
 }
 
 Future<void> resendPendingIfNeeded(int employeeId, String token) async {
   final prefs = await SharedPreferences.getInstance();
-
   final lastResend = prefs.getInt("last_resend_time") ?? 0;
   final now = DateTime.now().millisecondsSinceEpoch;
 
-  //  Only allow resend every 15 minutes
-  if (now - lastResend < 15 * 60 * 1000) {
-    return;
-  }
+  if (now - lastResend < 15 * 60 * 1000) return;
 
   await prefs.setInt("last_resend_time", now);
-
   await resendPendingLocations(employeeId, token);
 }
 
+// ─── Visit notification check ─────────────────────────────────────────────────
 Future<void> checkVisitsAndNotify() async {
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -238,33 +353,27 @@ Future<void> checkVisitsAndNotify() async {
 
     final data = jsonDecode(response.body);
     print("VISIT API RESPONSE: $data");
-    print("CHECK VISITS CALLED");
 
     if (response.statusCode == 200) {
-      // int visits = data['visits'] ?? 0;
       int visits = data['totalVisits'] ?? 0;
 
       final lastTime = prefs.getInt("last_notify_time") ?? 0;
       final currentTime = DateTime.now().millisecondsSinceEpoch;
-
       final diff = currentTime - lastTime;
 
-      print("LAST TIME: $lastTime");
-      print("CURRENT: $currentTime");
-      print("DIFF MS: $diff");
-
       if (visits < 4) {
-        // if (lastTime == 0 || diff >= 10 * 1000) {
         if (lastTime == 0 || diff >= 15 * 60 * 1000) {
           await prefs.setInt("last_notify_time", currentTime);
 
-          String message = visits == 0
+          final String message = visits == 0
               ? "You haven't started visits yet. Complete 4 visits to avoid half day."
               : "You have only $visits visits. Complete 4 visits to avoid half day.";
 
-          await NotificationService.showNotification("Visit Reminder", message);
-
-          print(" NOTIFICATION SENT");
+          await NotificationService.showNotification(
+            "Visit Reminder",
+            message,
+          );
+          print("NOTIFICATION SENT");
         }
       }
     }
@@ -273,53 +382,86 @@ Future<void> checkVisitsAndNotify() async {
   }
 }
 
+// ─── Background service entry point ──────────────────────────────────────────
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
-  WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
 
   await NotificationService.init();
-  await checkVisitsAndNotify();
-  Timer? timer;
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
+final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
+
+if (!isCheckedIn) {
+  print("Service started but user not checked in — stopping");
+  service.stopSelf();
+  return;
+}
 
   if (service is AndroidServiceInstance) {
+    service.on('setAsForeground').listen((_) {
+      service.setAsForegroundService();
+    });
+    service.on('setAsBackground').listen((_) {
+      service.setAsBackgroundService();
+    });
+
     await service.setAsForegroundService();
     service.setForegroundNotificationInfo(
       title: "Tracking Active",
       content: "Location tracking is running",
     );
   }
-  print(" BACKGROUND SERVICE STARTED");
-  timer = Timer.periodic(const Duration(minutes: 12), (timer) async {
-    print("⏱ VISIT CHECK TIMER");
 
+  await _loadCredentials();
+  print("BACKGROUND SERVICE STARTED");
+
+  if (_cachedEmployeeId == null || _cachedToken == null) {
+    print("Credentials not ready — retrying in 5s...");
+    await Future.delayed(const Duration(seconds: 5));
+    await _loadCredentials();
+  }
+
+  await checkVisitsAndNotify();
+
+  Timer.periodic(const Duration(minutes: 10), (_) async {
+    await _loadCredentials();
+    print("Credentials refreshed");
+  });
+
+  Timer.periodic(const Duration(minutes: 12), (_) async {
+    print("VISIT CHECK TIMER");
     await checkVisitsAndNotify();
   });
 
-  Timer.periodic(const Duration(minutes: 2), (timer) async {
-    print(" STATUS CHECK RUNNING");
-
+  Timer.periodic(const Duration(minutes: 2), (_) async {
+    print("STATUS CHECK RUNNING");
     await StatusService.sendStatus();
   });
 
-  Geolocator.getPositionStream(
-  locationSettings: AndroidSettings(
-    accuracy: LocationAccuracy.high,
-    distanceFilter: 0, // important
-    intervalDuration: Duration(minutes: 1), //  every 1 min
-  ),
-).listen((Position position) async {
-  print("LOCATION EVERY 1 MIN: ${DateTime.now()}");
+  Timer.periodic(const Duration(minutes: 5), (_) {
+    if (_locationSubscription == null) {
+      print("WATCHDOG: GPS stream is dead — restarting...");
+      _startLocationStream(service);
+    } else {
+      print("WATCHDOG: GPS stream is alive ✓");
+    }
+  });
 
-  await sendLocationFromStream(service, position);
-});
+  _startLocationStream(service);
 
-//   service.on('stopService').listen((event) {
-//   service.stopSelf();
-// });
-
-service.on('stopService').listen((event) {
+  service.on('stopService').listen((event) async {
     print("STOP SERVICE CALLED");
+    _locationSubscription?.cancel();
+    _locationSubscription = null;
+
+    // FIX: Clear the checked-in flag when service is stopped via day_over
+    // so that _resumeServiceIfNeeded() does NOT restart it on next app launch.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_checked_in', false);
+    await prefs.remove('work_type');
+
     service.stopSelf();
   });
 }

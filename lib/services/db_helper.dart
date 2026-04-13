@@ -16,6 +16,7 @@ class DBHelper {
     return await openDatabase(
       path,
       version: 1,
+      singleInstance: true,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE locations(

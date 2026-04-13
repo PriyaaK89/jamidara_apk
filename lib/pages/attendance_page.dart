@@ -376,9 +376,19 @@ class _AttendancePageState extends State<AttendancePage> {
 
       if (submittedAttendanceType == "present") {
         final prefs = await SharedPreferences.getInstance();
-        prefs.setString("work_type", submittedWorkType ?? "");
+
+        await prefs.setInt('employee_id', widget.employeeId);
+        await prefs.setString('token', widget.token);
+
+      await prefs.setString("work_type", submittedWorkType ?? "");
+        await prefs.setBool('is_checked_in', true);
         await prefs.reload();
+
+        print(
+          "PRESENT SAVED → ID in Attendance Page: ${widget.employeeId}, TOKEN: ${widget.token}",
+        );
         print("WORK TYPE: $workType");
+        
 
         await prefs.remove("last_notify_time");
 
@@ -389,10 +399,7 @@ class _AttendancePageState extends State<AttendancePage> {
           await Future.delayed(const Duration(seconds: 1));
         }
 
-        await service.startService();
-
         bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-
         if (!serviceEnabled) {
           await Flushbar(
             message: "Please enable GPS",
@@ -445,10 +452,10 @@ class _AttendancePageState extends State<AttendancePage> {
         if (await Permission.notification.isDenied) {
           await Permission.notification.request();
         }
-        // final running = await service.isRunning();
-        // if (!running) {
-        //   await service.startService();
-        // }
+
+        await service.startService();
+
+        print("SERVICE STARTED AFTER PERMISSIONS");
       }
 
       if (submittedAttendanceType == "day_over") {
@@ -457,7 +464,7 @@ class _AttendancePageState extends State<AttendancePage> {
           service.invoke("stopService");
         }
       }
-      resetForm(); // <-- move here, at the end
+      resetForm();
     } catch (e) {
       ScaffoldMessenger.of(
         context,

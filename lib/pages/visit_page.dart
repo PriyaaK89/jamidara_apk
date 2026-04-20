@@ -145,18 +145,48 @@ class _VisitPageState extends State<VisitPage> {
     }
 
     LocationPermission permission = await Geolocator.checkPermission();
-   if (permission == LocationPermission.denied) {
-  permission = await Geolocator.requestPermission();
-}
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
 
-if (permission == LocationPermission.deniedForever) {
-  await Geolocator.openAppSettings();
-  throw Exception("Location permanently denied");
-}
+    if (permission == LocationPermission.deniedForever) {
+      await Geolocator.openAppSettings();
+      throw Exception("Location permanently denied");
+    }
 
     return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
+  }
+
+  //  check loaction when user submit visit ---
+  Future<bool> checkLocationBeforeSubmit() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
+    if (!serviceEnabled) {
+      _showFlushbar("Please enable location first");
+      await Geolocator.openLocationSettings();
+      return false;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+
+      if (permission == LocationPermission.denied) {
+        _showFlushbar("Location permission denied");
+        return false;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      _showFlushbar("Location permission permanently denied");
+      await Geolocator.openAppSettings();
+      return false;
+    }
+
+    return true;
   }
 
   Future<String> _getAddress(double lat, double lng) async {
@@ -364,35 +394,37 @@ if (permission == LocationPermission.deniedForever) {
       },
     );
   }
-  // api fall back 
+
+  // api fall back
   Future<dynamic> retryApiCall(Function apiCall, {int retries = 3}) async {
-  for (int i = 0; i < retries; i++) {
-    try {
-      return await apiCall();
-    } catch (e) {
-      if (i == retries - 1) rethrow;
-      await Future.delayed(const Duration(seconds: 2));
+    for (int i = 0; i < retries; i++) {
+      try {
+        return await apiCall();
+      } catch (e) {
+        if (i == retries - 1) rethrow;
+        await Future.delayed(const Duration(seconds: 2));
+      }
     }
   }
-}
 
-  // internet check connection 
+  // internet check connection
   Future<bool> hasInternetConnection() async {
-  var connectivityResult = await Connectivity().checkConnectivity();
+    var connectivityResult = await Connectivity().checkConnectivity();
 
-  if (connectivityResult == ConnectivityResult.none) {
-    return false;
+    if (connectivityResult == ConnectivityResult.none) {
+      return false;
+    }
+
+    try {
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 3));
+
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
   }
-
-  try {
-    final result = await InternetAddress.lookup('google.com')
-        .timeout(const Duration(seconds: 3));
-
-    return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-  } catch (e) {
-    return false;
-  }
-}
 
   Future<void> _pickImageFromCamera(CameraDevice cameraDevice) async {
     final hasPermission = await _requestCameraPermission();
@@ -643,33 +675,104 @@ if (permission == LocationPermission.deniedForever) {
   }
 
   // internet connection conectio pop up
-  Future<void> showNoInternetPopup() async {
-  if (!mounted) return;
 
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text("No Internet"),
-        content: const Text("Please check your internet connection."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
+  Future<void> showNoInternetPopup() async {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-        ],
-      );
-    },
-  );
-}
+          elevation: 10,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.wifi_off_rounded,
+                    color: Colors.red,
+                    size: 30,
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                const Text(
+                  "No Internet Connection",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 8),
+
+                const Text(
+                  "Please check your internet connection and try again.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color.fromARGB(137, 0, 0, 0),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Cancel"),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          Navigator.pop(context);
+
+                          bool hasInternet = await hasInternetConnection();
+                          if (!hasInternet) {
+                            showNoInternetPopup(); // retry popup
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2E7D32),
+                        ),
+                        child: const Text(
+                          "Retry",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _submitForm() async {
-     bool hasInternet = await hasInternetConnection();
-
-  if (!hasInternet) {
-    await showNoInternetPopup();
-    return;
-  }
+    bool hasInternet = await hasInternetConnection();
+    if (!hasInternet) {
+      await showNoInternetPopup();
+      return;
+    }
+    //  LOCATION CHECK
+    bool hasLocation = await checkLocationBeforeSubmit();
+    if (!hasLocation) return;
     if (attendanceType == null) {
       _showFlushbar("Please select attendance type");
       return;
@@ -701,28 +804,27 @@ if (permission == LocationPermission.deniedForever) {
     });
     print("customerId: $selectedCustomerId");
     try {
-    final response = await retryApiCall(() {
-  return ApiService.uploadVisit(
-    visitType: attendanceType!,
-    customerType: customerType!,
-    customerId: selectedCustomerId,
-    name: nameController.text.trim(),
-    firm_name: firmNameController.text.trim(),
-    firm_address: firmAddressController.text.trim(),
-    contactNumber: contactNumberController.text.trim(),
-    address: addressController.text.trim(),
-    district: districtController.text.trim(),
-    visitPurpose: visitPurpose!,
-    comment: commentController.text.trim(),
-    reminderDate: reminderDateController.text.trim().isEmpty
-        ? null
-        : reminderDateController.text.trim(),
-    pincode: pincodeController.text.trim(),
-    area: selectedArea ?? '',
-    image: _selectedImage,
-  );
-});
-     
+      final response = await retryApiCall(() {
+        return ApiService.uploadVisit(
+          visitType: attendanceType!,
+          customerType: customerType!,
+          customerId: selectedCustomerId,
+          name: nameController.text.trim(),
+          firm_name: firmNameController.text.trim(),
+          firm_address: firmAddressController.text.trim(),
+          contactNumber: contactNumberController.text.trim(),
+          address: addressController.text.trim(),
+          district: districtController.text.trim(),
+          visitPurpose: visitPurpose!,
+          comment: commentController.text.trim(),
+          reminderDate: reminderDateController.text.trim().isEmpty
+              ? null
+              : reminderDateController.text.trim(),
+          pincode: pincodeController.text.trim(),
+          area: selectedArea ?? '',
+          image: _selectedImage,
+        );
+      });
 
       bool success = response["success"];
       String message = response["message"];

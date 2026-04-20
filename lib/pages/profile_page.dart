@@ -422,8 +422,13 @@ Future<void> _uploadImage() async {
             sectionTitle("Allowances"),
             sectionCard([
               infoTile(
-                "Travelling Allowance",
-                "₹${profile!['travelling_allowance_per_km'] ?? ''}",
+                " Two Wheeler Travelling Allowance",
+                "₹${profile!['two_wheeler_allowance_per_km'] ?? ''}",
+                Icons.directions_bike,
+              ),
+              infoTile(
+                "Four WheelerTravelling Allowance",
+                "₹${profile!['four_wheeler_allowance_per_km'] ?? ''}",
                 Icons.directions_car,
               ),
               infoTile(

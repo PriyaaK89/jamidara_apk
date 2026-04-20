@@ -867,27 +867,39 @@ static Future<Map<String, dynamic>> uploadExpense({
   }
 
   static Future<dynamic> updateUserStatus({
-    required String token,
-    required String internetStatus,
-    required String locationStatus,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final baseUrl = prefs.getString('FLUTTER_BASE_URL');
+  required String token,
+  required String internetStatus,
+  required String locationStatus,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL');
 
-    final response = await http.post(
-      Uri.parse('$baseUrl${Endpoints.updateUserStatus}'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        "internet_status": internetStatus,
-        "location_status": locationStatus,
-      }),
-    );
+  final response = await http.post(
+    Uri.parse('$baseUrl${Endpoints.updateUserStatus}'),
+    headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode({
+      "internet_status": internetStatus,
+      "location_status": locationStatus,
+    }),
+  );
 
+  //  HANDLE 403 HERE
+  if (response.statusCode == 403) {
+    return {
+      "forceLogout": true,
+      "message": jsonDecode(response.body)['message']
+    };
+  }
+
+  if (response.statusCode == 200) {
     return jsonDecode(response.body);
   }
+
+  throw Exception("API failed with status ${response.statusCode}");
+}
 
   // Initiate Aadhaar KYC
   static Future<Map<String, dynamic>> sendForAadharKYC({

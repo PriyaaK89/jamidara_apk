@@ -8,6 +8,7 @@ import 'package:another_flushbar/flushbar.dart';
 import '../services/storage_service.dart';
 import "../layout/app_router.dart";
 import '../routes/app_routes.dart';
+import '../services/location_service.dart';
 
 class LoginPage extends StatefulWidget {
   final String? message;
@@ -70,10 +71,12 @@ class _LoginPageState extends State<LoginPage> {
       debugPrint('Form validation failed');
       return;
     }
+      bool locationOk = await LocationService.checkLocation(context);
+  if (!locationOk) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+  setState(() {
+    _isLoading = true;
+  });
 
     try {
       final response = await ApiService.login(
@@ -136,9 +139,6 @@ print("LOGIN SAVED → ID: $employeeId, TOKEN: $token");
       ).show(context);
       if (!mounted) return;
 
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   SnackBar(content: Text('Error: $e')),
-      // );
       Flushbar(
         message: "Error: $e",
         duration: const Duration(seconds: 3),

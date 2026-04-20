@@ -3,7 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:geolocator/geolocator.dart' as geo;
+import './services/status_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'routes/app_routes.dart';
@@ -14,14 +15,15 @@ import 'services/notification_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import './services/db_helper.dart';
-import './services/status_service.dart';
 
 // ─── Top-level cached credentials (safe in background isolate) ───────────────
 int? _cachedEmployeeId;
 String? _cachedToken;
+String _currentLocationStatus = "OFF";
 
 // ─── Track active stream subscription so we can cancel & restart it ──────────
-StreamSubscription<Position>? _locationSubscription;
+StreamSubscription<geo.Position>? _locationSubscription;
+StreamSubscription<geo.ServiceStatus>? _serviceStatusSubscription;
 
 // ─── How many consecutive stream errors before we give up & restart ───────────
 int _streamErrorCount = 0;
@@ -162,21 +164,22 @@ void _startLocationStream(ServiceInstance service) {
 
   print("Starting GPS location stream...");
 
-  _locationSubscription = Geolocator.getPositionStream(
-    locationSettings: AndroidSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 0,
-      intervalDuration: const Duration(seconds: 30),
-      foregroundNotificationConfig: const ForegroundNotificationConfig(
-        notificationText: "Tracking your location",
-        notificationTitle: "Location Active",
-        enableWakeLock: true,
-        setOngoing: true,
-      ),
+  _locationSubscription = geo.Geolocator.getPositionStream(
+  locationSettings: geo.AndroidSettings(
+    accuracy: geo.LocationAccuracy.high,
+    distanceFilter: 0,
+    intervalDuration: const Duration(seconds: 30),
+    foregroundNotificationConfig: const geo.ForegroundNotificationConfig(
+      notificationText: "Tracking your location",
+      notificationTitle: "Location Active",
+      enableWakeLock: true,
+      setOngoing: true,
     ),
-  ).listen(
-    (Position position) async {
+  ),
+).listen(
+    (geo.Position position) async {
       _streamErrorCount = 0;
+       _currentLocationStatus = "ON";
       print("LOCATION: ${DateTime.now()}");
       await sendLocationFromStream(service, position);
     },
@@ -201,7 +204,7 @@ void _startLocationStream(ServiceInstance service) {
 Future<void> sendLocationFromStream(
   
   ServiceInstance service,
-  Position position,
+  geo.Position position,
 ) async {
   try {
     
@@ -224,15 +227,15 @@ if (!isCheckedIn) {
       return;
     }
 
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       print("LOCATION SKIPPED: Location service is disabled on device");
       return;
     }
 
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+    final permission = await geo.Geolocator.checkPermission();
+    if (permission == geo.LocationPermission.denied ||
+        permission == geo.LocationPermission.deniedForever) {
       print("LOCATION SKIPPED: Location permission is $permission");
       return;
     }
@@ -282,7 +285,7 @@ if (!isCheckedIn) {
 }
 
 // ─── SQLite helpers ───────────────────────────────────────────────────────────
-Future<void> saveLocationLocally(Position position) async {
+Future<void> saveLocationLocally(geo.Position position) async {
   await DBHelper.insertLocation({
     'latitude': position.latitude,
     'longitude': position.longitude,
@@ -382,6 +385,42 @@ Future<void> checkVisitsAndNotify() async {
   }
 }
 
+void _listenToLocationService(ServiceInstance service) {
+  _serviceStatusSubscription?.cancel();
+
+  _serviceStatusSubscription =
+      geo.Geolocator.getServiceStatusStream().listen((status) async {
+
+    print("GPS STATUS CHANGED: $status");
+
+    String newStatus =
+        status == geo.ServiceStatus.enabled ? "ON" : "OFF";
+
+    //  Only send when actual change happens
+    if (_currentLocationStatus == newStatus) {
+      print("No change in location status");
+      return;
+    }
+
+    _currentLocationStatus = newStatus;
+
+    print("Sending instant status update: $newStatus");
+
+    // await StatusService.sendStatus(
+    //   locationOverride: newStatus,
+    // );
+    final shouldLogout = await StatusService.sendStatus(
+  locationOverride: newStatus,
+);
+
+if (shouldLogout) {
+  print("Instant logout trigger");
+
+  service.invoke("forceLogout"); // immediate logout
+}
+  });
+}
+
 // ─── Background service entry point ──────────────────────────────────────────
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
@@ -415,6 +454,8 @@ if (!isCheckedIn) {
   }
 
   await _loadCredentials();
+
+  _listenToLocationService(service);
   print("BACKGROUND SERVICE STARTED");
 
   if (_cachedEmployeeId == null || _cachedToken == null) {
@@ -430,17 +471,26 @@ if (!isCheckedIn) {
     print("Credentials refreshed");
   });
 
-  Timer.periodic(const Duration(minutes: 12), (_) async {
+  Timer.periodic(const Duration(minutes: 18), (_) async {
     print("VISIT CHECK TIMER");
     await checkVisitsAndNotify();
   });
 
-  Timer.periodic(const Duration(minutes: 2), (_) async {
+  Timer.periodic(const Duration(minutes: 1), (_) async {
     print("STATUS CHECK RUNNING");
-    await StatusService.sendStatus();
+    // await StatusService.sendStatus();
+      final shouldLogout = await StatusService.sendStatus();
+
+  if (shouldLogout) {
+    print(" Sending logout event to UI");
+
+    service.invoke("forceLogout"); // correct place
+  }
+
+    print("SERVICE STILL RUNNING");
   });
 
-  Timer.periodic(const Duration(minutes: 5), (_) {
+  Timer.periodic(const Duration(minutes: 6), (_) {
     if (_locationSubscription == null) {
       print("WATCHDOG: GPS stream is dead — restarting...");
       _startLocationStream(service);
@@ -455,6 +505,9 @@ if (!isCheckedIn) {
     print("STOP SERVICE CALLED");
     _locationSubscription?.cancel();
     _locationSubscription = null;
+
+    _serviceStatusSubscription?.cancel();
+_serviceStatusSubscription = null;
 
     // FIX: Clear the checked-in flag when service is stopped via day_over
     // so that _resumeServiceIfNeeded() does NOT restart it on next app launch.

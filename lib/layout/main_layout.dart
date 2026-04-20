@@ -4,6 +4,9 @@ import '../pages/profile_menu_page.dart';
 import '../services/api_service.dart';
 import '../services/user_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/app_state.dart';
+import '../services/auth_service.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 class MainLayout extends StatefulWidget {
   final Widget child;
@@ -25,10 +28,37 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
 
-  @override
+//   @override
+// void initState() {
+//   super.initState();
+//   _loadUserProfile();
+// }
+late VoidCallback _logoutListener;
+
+@override
 void initState() {
   super.initState();
+
+  // _logoutListener = () {
+  //   if (AppState.forceLogout.value) {
+  //     AppState.forceLogout.value = false;
+  //     AuthService.logout(context); }
+  // };
+  // AppState.forceLogout.addListener(_logoutListener);
+
+    FlutterBackgroundService().on("forceLogout").listen((event) {
+    print(" Force logout received in UI");
+
+    AuthService.logout(context);
+  });
+
   _loadUserProfile();
+}
+
+@override
+void dispose() {
+  AppState.forceLogout.removeListener(_logoutListener);
+  super.dispose();
 }
 
   void _openProfileMenu() {

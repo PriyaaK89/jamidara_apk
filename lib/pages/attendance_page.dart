@@ -600,7 +600,7 @@ class _AttendancePageState extends State<AttendancePage> {
                   ),
                   OptionButton(
                     text: 'WFH',
-                    value: 'work_from_home',
+                    value: 'wfh',
                     selectedValue: workType,
                     onTap: (val) {
                       setState(() {

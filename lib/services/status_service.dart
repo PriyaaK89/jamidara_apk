@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,44 +8,64 @@ import './db_helper.dart';
 class StatusService {
 
   //  MAIN FUNCTION (CALLED EVERY 2 MIN)
-  static Future<void> sendStatus() async {
-    final prefs = await SharedPreferences.getInstance();
+ static Future<bool> sendStatus({String? locationOverride}) async {
+  final prefs = await SharedPreferences.getInstance();
 
-    final token = prefs.getString('token');
-    final userId = prefs.getInt('employee_id');
+  final token = prefs.getString('token');
+  final userId = prefs.getInt('employee_id');
 
-    if (token == null || userId == null) return;
+  if (token == null || userId == null) return false;
 
-    //  STEP 1: SEND OLD FAILED STATUS FIRST (VERY IMPORTANT)
-    await _resendPendingStatus(token);
+  await _resendPendingStatus(token);
 
-    //  STEP 2: GET CURRENT STATUS
-    final internetStatus = await _checkInternet();
-    final locationStatus = await _checkLocation();
+  final internetStatus = await _checkInternet();
+  final locationStatus = locationOverride ?? await _checkLocation();
 
-    try {
-      final response = await ApiService.updateUserStatus(
-        token: token,
-        internetStatus: internetStatus,
-        locationStatus: locationStatus,
-      );
+  final lastInternet = prefs.getString("last_internet_status");
+  final lastLocation = prefs.getString("last_location_status");
 
-      //  IF API FAILS → SAVE LOCALLY
-      if (response == null || response['success'] != true) {
-        throw Exception("API failed");
-      }
-
-    } catch (e) {
-      print("Status API failed → saving locally");
-
-      await DBHelper.insertStatus({
-        'internet_status': internetStatus,
-        'location_status': locationStatus,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-    }
+  if (lastInternet == internetStatus &&
+      lastLocation == locationStatus &&
+      locationOverride == null) {
+    print("Status unchanged → skipping API");
+    return false;
   }
 
+  try {
+    final response = await ApiService.updateUserStatus(
+      token: token,
+      internetStatus: internetStatus,
+      locationStatus: locationStatus,
+    );
+
+    //  JUST RETURN TRUE (DO NOT LOGOUT HERE)
+    if (response != null && response["forceLogout"] == true) {
+      print(" Force logout triggered");
+      return true;
+    }
+
+    if (response == null || response['success'] != true) {
+      throw Exception("API failed");
+    }
+
+    await prefs.setString("last_internet_status", internetStatus);
+    await prefs.setString("last_location_status", locationStatus);
+
+    print("STATUS SENT SUCCESS");
+    return false;
+
+  } catch (e) {
+    print("Status API failed → saving locally");
+
+    await DBHelper.insertStatus({
+      'internet_status': internetStatus,
+      'location_status': locationStatus,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+
+    return false;
+  }
+}
   //  INTERNET CHECK
 static Future<String> _checkInternet() async {
   final connectivity = await Connectivity().checkConnectivity();
@@ -67,11 +86,28 @@ static Future<String> _checkInternet() async {
   return "OFFLINE";
 }
 
-  //  LOCATION CHECK
-  static Future<String> _checkLocation() async {
+static Future<String> _checkLocation() async {
+  try {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    return serviceEnabled ? "ON" : "OFF";
+    if (!serviceEnabled) return "OFF";
+
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return "OFF";
+    }
+
+    //  FAST + BATTERY FRIENDLY
+    final position = await Geolocator.getLastKnownPosition();
+
+    if (position != null) return "ON";
+
+    return "OFF";
+  } catch (e) {
+    return "OFF";
   }
+}
 
   //  RESEND FAILED STATUS (CRITICAL FIX)
   static Future<void> _resendPendingStatus(String token) async {

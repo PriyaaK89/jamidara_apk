@@ -17,6 +17,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class AttendancePage extends StatefulWidget {
   final int employeeId;
@@ -32,6 +33,7 @@ class AttendancePage extends StatefulWidget {
 }
 
 class _AttendancePageState extends State<AttendancePage> {
+
   final _formKey = GlobalKey<FormState>();
 
   String? attendanceType;
@@ -235,6 +237,26 @@ class _AttendancePageState extends State<AttendancePage> {
     return true;
   }
 
+
+  // toast for check connection
+  Future<bool> hasInternetConnection() async {
+  var connectivityResult = await Connectivity().checkConnectivity();
+
+  if (connectivityResult == ConnectivityResult.none) {
+    return false;
+  }
+
+  // extra check (important for poor network)
+  try {
+    final result = await InternetAddress.lookup('google.com')
+        .timeout(const Duration(seconds: 3));
+
+    return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+  } catch (e) {
+    return false;
+  }
+}
+
   Future<File?> compressImage(File file) async {
     final dir = await getApplicationDocumentsDirectory();
     final targetPath =
@@ -269,6 +291,18 @@ class _AttendancePageState extends State<AttendancePage> {
     }
   }
 
+  // if slow network then api doesnot fails its try
+  Future<dynamic> retryApiCall(Function apiCall, {int retries = 3}) async {
+  for (int i = 0; i < retries; i++) {
+    try {
+      return await apiCall().timeout(const Duration(seconds: 10));
+    } catch (e) {
+      if (i == retries - 1) rethrow;
+      await Future.delayed(const Duration(seconds: 2));
+    }
+  }
+}
+
   Future<void> handleSubmit() async {
     if (!isFormValid()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -276,6 +310,12 @@ class _AttendancePageState extends State<AttendancePage> {
       );
       return;
     }
+      bool hasInternet = await hasInternetConnection();
+  if (!hasInternet) {
+    await showNoInternetPopup();
+    return;
+  }
+
 
     setState(() {
       isLoading = true;
@@ -346,23 +386,25 @@ class _AttendancePageState extends State<AttendancePage> {
           ? await compressImage(stampedOdometer)
           : null;
 
-      final response = await ApiService.markAttendance(
-        employeeId: widget.employeeId,
-        token: widget.token,
-        status: submittedAttendanceType!,
-        workType: submittedWorkType,
-        fieldWorkType: submittedWorkingArea,
-        travelMode: submittedTravelMode,
-        vehicleType: submittedVehicleType,
-        visitLocation: submittedAttendanceType == "day_over"
-            ? currentLocation
-            : submittedVisitLocation,
-        odometerReading: submittedOdometerReading,
-        selfie: compressedSelfie ?? stampedSelfie ?? selfieImage,
-        odometerImage: compressedOdometer ?? stampedOdometer ?? odometerImage,
-      );
-
-      Flushbar(
+     final response = await retryApiCall(() {
+  return ApiService.markAttendance(
+    employeeId: widget.employeeId,
+    token: widget.token,
+    status: submittedAttendanceType!,
+    workType: submittedWorkType,
+    fieldWorkType: submittedWorkingArea,
+    travelMode: submittedTravelMode,
+    vehicleType: submittedVehicleType,
+    visitLocation: submittedAttendanceType == "day_over"
+        ? currentLocation
+        : submittedVisitLocation,
+    odometerReading: submittedOdometerReading,
+    selfie: compressedSelfie ?? stampedSelfie ?? selfieImage,
+    odometerImage: compressedOdometer ?? stampedOdometer ?? odometerImage,
+  );
+});
+        
+          Flushbar(
         message: response['message'] ?? 'Attendance submitted',
         duration: const Duration(seconds: 2),
         flushbarPosition: FlushbarPosition.BOTTOM,
@@ -466,6 +508,7 @@ class _AttendancePageState extends State<AttendancePage> {
       }
       resetForm();
     } catch (e) {
+      
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -518,6 +561,25 @@ class _AttendancePageState extends State<AttendancePage> {
         ) ??
         false;
   }
+
+//  pop for internet connecton
+  Future<void> showNoInternetPopup() async {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text("No Internet"),
+        content: const Text("Please check your internet connection."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      );
+    },
+  );
+}
 
   @override
   Widget build(BuildContext context) {

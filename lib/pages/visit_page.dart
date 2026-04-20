@@ -15,6 +15,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class VisitPage extends StatefulWidget {
   const VisitPage({super.key});
@@ -144,9 +145,14 @@ class _VisitPageState extends State<VisitPage> {
     }
 
     LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
+   if (permission == LocationPermission.denied) {
+  permission = await Geolocator.requestPermission();
+}
+
+if (permission == LocationPermission.deniedForever) {
+  await Geolocator.openAppSettings();
+  throw Exception("Location permanently denied");
+}
 
     return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
@@ -358,6 +364,35 @@ class _VisitPageState extends State<VisitPage> {
       },
     );
   }
+  // api fall back 
+  Future<dynamic> retryApiCall(Function apiCall, {int retries = 3}) async {
+  for (int i = 0; i < retries; i++) {
+    try {
+      return await apiCall();
+    } catch (e) {
+      if (i == retries - 1) rethrow;
+      await Future.delayed(const Duration(seconds: 2));
+    }
+  }
+}
+
+  // internet check connection 
+  Future<bool> hasInternetConnection() async {
+  var connectivityResult = await Connectivity().checkConnectivity();
+
+  if (connectivityResult == ConnectivityResult.none) {
+    return false;
+  }
+
+  try {
+    final result = await InternetAddress.lookup('google.com')
+        .timeout(const Duration(seconds: 3));
+
+    return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+  } catch (e) {
+    return false;
+  }
+}
 
   Future<void> _pickImageFromCamera(CameraDevice cameraDevice) async {
     final hasPermission = await _requestCameraPermission();
@@ -607,7 +642,34 @@ class _VisitPageState extends State<VisitPage> {
     );
   }
 
+  // internet connection conectio pop up
+  Future<void> showNoInternetPopup() async {
+  if (!mounted) return;
+
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text("No Internet"),
+        content: const Text("Please check your internet connection."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      );
+    },
+  );
+}
+
   Future<void> _submitForm() async {
+     bool hasInternet = await hasInternetConnection();
+
+  if (!hasInternet) {
+    await showNoInternetPopup();
+    return;
+  }
     if (attendanceType == null) {
       _showFlushbar("Please select attendance type");
       return;
@@ -639,26 +701,28 @@ class _VisitPageState extends State<VisitPage> {
     });
     print("customerId: $selectedCustomerId");
     try {
-      final response = await ApiService.uploadVisit(
-        visitType: attendanceType!,
-        customerType: customerType!,
-        customerId: selectedCustomerId,
-        name: nameController.text.trim(),
-        firm_name: firmNameController.text.trim(),
-        firm_address: firmAddressController.text.trim(),
-        contactNumber: contactNumberController.text.trim(),
-        address: addressController.text.trim(),
-        district: districtController.text.trim(),
-        visitPurpose: visitPurpose!,
-        comment: commentController.text.trim(),
-        // reminderDate: reminderDateController.text.trim(),
-        reminderDate: reminderDateController.text.trim().isEmpty
-            ? null
-            : reminderDateController.text.trim(),
-        pincode: pincodeController.text.trim(),
-        area: selectedArea ?? '',
-        image: _selectedImage,
-      );
+    final response = await retryApiCall(() {
+  return ApiService.uploadVisit(
+    visitType: attendanceType!,
+    customerType: customerType!,
+    customerId: selectedCustomerId,
+    name: nameController.text.trim(),
+    firm_name: firmNameController.text.trim(),
+    firm_address: firmAddressController.text.trim(),
+    contactNumber: contactNumberController.text.trim(),
+    address: addressController.text.trim(),
+    district: districtController.text.trim(),
+    visitPurpose: visitPurpose!,
+    comment: commentController.text.trim(),
+    reminderDate: reminderDateController.text.trim().isEmpty
+        ? null
+        : reminderDateController.text.trim(),
+    pincode: pincodeController.text.trim(),
+    area: selectedArea ?? '',
+    image: _selectedImage,
+  );
+});
+     
 
       bool success = response["success"];
       String message = response["message"];

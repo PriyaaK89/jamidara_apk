@@ -42,12 +42,56 @@ class _AttendancePageState extends State<AttendancePage> {
   String? visitLocation;
   String odometerReading = '';
   String? currentLocation;
+  String leaveReason = '';
 
   File? selfieImage;
   File? odometerImage;
 
   final ImagePicker _picker = ImagePicker();
   bool isLoading = false;
+
+  Map<String, dynamic>? todayAttendance;
+  bool isFetchingAttendance = false;
+  Future<void> fetchTodayAttendance() async {
+    try {
+      setState(() {
+        isFetchingAttendance = true;
+      });
+
+      final response = await ApiService.getTodayAttendance(
+        widget.employeeId,
+        widget.token,
+      );
+
+      if (response["success"] == true) {
+        final data = response["data"];
+
+        setState(() {
+          todayAttendance = data;
+
+          workType = data["work_type"];
+          travelMode = data["travel_mode"];
+          vehicleType = data["vehicle_type"];
+        });
+
+      
+        debugPrint("FULL RESPONSE: $response");
+        debugPrint("WORK TYPE: ${data["work_type"]}");
+debugPrint("TRAVEL MODE: ${data["travel_mode"]}");
+debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(response["message"])));
+      }
+    } catch (e) {
+      debugPrint("FETCH ATTENDANCE ERROR: $e");
+    } finally {
+      setState(() {
+        isFetchingAttendance = false;
+      });
+    }
+  }
 
   Future<Position> getSafeCurrentLocation() async {
     bool serviceEnabled;
@@ -205,6 +249,10 @@ class _AttendancePageState extends State<AttendancePage> {
   bool isFormValid() {
     if (attendanceType == null) return false;
 
+     if (attendanceType == "leave") {
+    return leaveReason.trim().isNotEmpty;
+  }
+
     if (attendanceType == 'present' || attendanceType == 'day_over') {
       if (workType == null) return false;
 
@@ -227,9 +275,15 @@ class _AttendancePageState extends State<AttendancePage> {
 
       if (attendanceType == 'day_over') {
         if (selfieImage == null) return false;
-        if (odometerReading.isEmpty) return false;
-        if (workType == 'field' && odometerImage == null) return false;
-        if (workType == 'office' && selfieImage == null) return false;
+
+        if (workType == 'field' && travelMode == 'private') {
+          if (odometerReading.isEmpty) return false;
+          if (odometerImage == null) return false;
+        }
+
+        if (workType == 'office' && selfieImage == null) {
+          return false;
+        }
       }
     }
     return true;
@@ -360,6 +414,7 @@ class _AttendancePageState extends State<AttendancePage> {
         odometerReading: submittedOdometerReading,
         selfie: compressedSelfie ?? stampedSelfie ?? selfieImage,
         odometerImage: compressedOdometer ?? stampedOdometer ?? odometerImage,
+        leaveReason: leaveReason,
       );
 
       Flushbar(
@@ -380,7 +435,7 @@ class _AttendancePageState extends State<AttendancePage> {
         await prefs.setInt('employee_id', widget.employeeId);
         await prefs.setString('token', widget.token);
 
-      await prefs.setString("work_type", submittedWorkType ?? "");
+        await prefs.setString("work_type", submittedWorkType ?? "");
         await prefs.setBool('is_checked_in', true);
         await prefs.reload();
 
@@ -388,7 +443,6 @@ class _AttendancePageState extends State<AttendancePage> {
           "PRESENT SAVED → ID in Attendance Page: ${widget.employeeId}, TOKEN: ${widget.token}",
         );
         print("WORK TYPE: $workType");
-        
 
         await prefs.remove("last_notify_time");
 
@@ -487,6 +541,7 @@ class _AttendancePageState extends State<AttendancePage> {
       odometerReading = '';
       selfieImage = null;
       odometerImage = null;
+      leaveReason = '';
     });
 
     _formKey.currentState?.reset();
@@ -519,6 +574,67 @@ class _AttendancePageState extends State<AttendancePage> {
         false;
   }
 
+  Widget _buildAttendanceInfoTile({
+  required IconData icon,
+  required String title,
+  required String value,
+}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 12,
+    ),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.blue,
+            size: 16,
+          ),
+        ),
+
+        const SizedBox(width: 14),
+
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+              const SizedBox(height: 2),
+
+              Text(
+                value.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -546,16 +662,17 @@ class _AttendancePageState extends State<AttendancePage> {
                   },
                 ),
                 OptionButton(
-                  text: 'Day Over',
-                  value: 'day_over',
-                  selectedValue: attendanceType,
-                  onTap: (val) {
-                    setState(() {
-                      attendanceType = val;
-                      workType = null;
-                    });
-                  },
-                ),
+  text: 'Day Over',
+  value: 'day_over',
+  selectedValue: attendanceType,
+  onTap: (val) async {
+    setState(() {
+      attendanceType = val;
+    });
+
+    await fetchTodayAttendance();
+  },
+),
                 OptionButton(
                   text: 'Leave',
                   value: 'leave',
@@ -569,8 +686,7 @@ class _AttendancePageState extends State<AttendancePage> {
                 ),
               ],
             ),
-            if (attendanceType == 'present' ||
-                attendanceType == 'day_over') ...[
+            if (attendanceType == 'present') ...[
               const SizedBox(height: 12),
               const Text(
                 'Work Type',
@@ -611,6 +727,29 @@ class _AttendancePageState extends State<AttendancePage> {
                 ],
               ),
             ],
+            if (attendanceType == 'leave') ...[
+  const SizedBox(height: 12),
+
+  const Text(
+    'Leave Reason',
+    style: TextStyle(fontWeight: FontWeight.bold),
+  ),
+
+  const SizedBox(height: 8),
+
+  TextFormField(
+    decoration: const InputDecoration(
+      labelText: 'Enter Leave Reason',
+      border: OutlineInputBorder(),
+    ),
+    maxLines: 3,
+    onChanged: (val) {
+      setState(() {
+        leaveReason = val;
+      });
+    },
+  ),
+],
             if (attendanceType == 'present' && workType == 'field') ...[
               const SizedBox(height: 12),
               const Text(
@@ -732,7 +871,9 @@ class _AttendancePageState extends State<AttendancePage> {
                 Image.file(odometerImage!, height: 150),
             ],
 
-            if (attendanceType == 'day_over' && workType == 'field') ...[
+            if (attendanceType == 'day_over' &&
+                workType == 'field' &&
+                travelMode == 'private') ...[
               const SizedBox(height: 12),
 
               const Text(
@@ -768,13 +909,102 @@ class _AttendancePageState extends State<AttendancePage> {
                 ),
             ],
 
-            const SizedBox(height: 12),
-            Center(
-              child: ElevatedButton(
-                onPressed: () => pickImage('selfie'),
-                child: const Text('Take Selfie'),
+            if (attendanceType == 'day_over' && todayAttendance != null) ...[
+  const SizedBox(height: 16),
+
+  Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+        color: Colors.blue.shade100,
+        width: 1.2,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+
+        Row(
+          children: const [
+            Icon(
+              Icons.assignment_turned_in_rounded,
+              color: Colors.blue,
+              size: 20,
+            ),
+            SizedBox(width: 8),
+            Text(
+              "Today's Attendance Details",
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
               ),
             ),
+          ],
+        ),
+
+        const SizedBox(height: 18),
+
+        _buildAttendanceInfoTile(
+          icon: Icons.work_outline,
+          title: "Work Type",
+          value: workType ?? '-',
+        ),
+
+        if (workType == "field") ...[
+          const SizedBox(height: 14),
+
+          _buildAttendanceInfoTile(
+            icon: Icons.route,
+            title: "Travel Mode",
+            value: travelMode ?? '-',
+          ),
+        ],
+
+        if (vehicleType != null) ...[
+          const SizedBox(height: 14),
+
+          _buildAttendanceInfoTile(
+            icon: Icons.directions_bike,
+            title: "Vehicle Type",
+            value: vehicleType!,
+          ),
+        ],
+      ],
+    ),
+  ),
+],
+
+            const SizedBox(height: 12),
+            // Center(
+            //   child: ElevatedButton(
+            //     onPressed: () => pickImage('selfie'),
+            //     child: const Text('Take Selfie'),
+            //   ),
+            // ),
+
+            if (attendanceType != 'leave') ...[
+  const SizedBox(height: 12),
+
+  Center(
+    child: ElevatedButton(
+      onPressed: () => pickImage('selfie'),
+      child: const Text('Take Selfie'),
+    ),
+  ),
+
+  if (selfieImage != null && selfieImage!.existsSync())
+    Image.file(selfieImage!, height: 150),
+],
             if (selfieImage != null && selfieImage!.existsSync())
               Image.file(selfieImage!, height: 150),
 

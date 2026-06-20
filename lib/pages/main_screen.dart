@@ -29,6 +29,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  Widget? _customOrderPage;
+
   late final List<Widget> _pages;
   String currentExpenseType = "HOTEL";
   String currentTitle = "Hotel Expense";
@@ -39,49 +41,53 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
 
     _pages = [
-       DashboardPage(employeeId: widget.employeeId), //  FIRST PAGE
-  AttendancePage(employeeId: widget.employeeId, token: widget.token),
+      DashboardPage(employeeId: widget.employeeId), //  FIRST PAGE
+      AttendancePage(employeeId: widget.employeeId, token: widget.token),
 
       const VisitPage(),
-      const OrderPage(),
+      // const OrderPage(),
+      OrderPage(
+        onOpenPage: (page) { setState(() { _customOrderPage = page; }); },
+      ),
       // const Center(child: Text("More Page", style: TextStyle(fontSize: 20))),
       QuickActionsPage(
-  onTabChange: (index) {
-    if (index == -1) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ExpensePage(
-  expenseType: currentExpenseType,
-  title: currentTitle,
-  remarks: currentRemarks,
-  onBackToQuickActions: () {
-    Navigator.pop(context); //  go back to QuickActionsPage
-  },
-),
-        ),
-      );
-    } else {
-      setState(() {
-        _selectedIndex = index;
-      });
-    }
-  },
+        onTabChange: (index) {
+          if (index == -1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ExpensePage(
+                  expenseType: currentExpenseType,
+                  title: currentTitle,
+                  remarks: currentRemarks,
+                  onBackToQuickActions: () {
+                    Navigator.pop(context); //  go back to QuickActionsPage
+                  },
+                ),
+              ),
+            );
+          } else {
+            setState(() {
+              _selectedIndex = index;
+            });
+          }
+        },
 
-  onExpenseSelect: (type, title, remarks) {
-    setState(() {
-      currentExpenseType = type;
-      currentTitle = title;
-      currentRemarks = remarks;
-    });
-  },
-),
+        onExpenseSelect: (type, title, remarks) {
+          setState(() {
+            currentExpenseType = type;
+            currentTitle = title;
+            currentRemarks = remarks;
+          });
+        },
+      ),
     ];
   }
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
+       _customOrderPage = null;
     });
   }
 
@@ -89,14 +95,14 @@ class _MainScreenState extends State<MainScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-      builder: (_) => ProfileMenuPage(
-  clearSavedCredentialsOnLogout: false,
-  onTabChange: (index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  },
-),
+        builder: (_) => ProfileMenuPage(
+          clearSavedCredentialsOnLogout: false,
+          onTabChange: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+        ),
       ),
     );
   }
@@ -174,67 +180,78 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-@override
-Widget build(BuildContext context) {
-  return WillPopScope(
-    onWillPop: () async {
-if (Navigator.canPop(context)) {
-  return true; // let current screen handle back
-}
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async {
+        if (Navigator.canPop(context)) {
+          return true; // let current screen handle back
+        }
+          if (_customOrderPage != null) {
+    setState(() {
+      _customOrderPage = null;
+    });
+    return false;
+  }
 
-if (_selectedIndex != 0) {
-  setState(() {
-    _selectedIndex = 0;
-  });
-  return false;
-} else {
-  SystemNavigator.pop();
-  return false;
-}
-    },
+        if (_selectedIndex != 0) {
+          setState(() {
+            _selectedIndex = 0;
+          });
+          return false;
+        } else {
+          SystemNavigator.pop();
+          return false;
+        }
+      },
 
-    child: Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
 
-      body: Column(
-        children: [
-          _buildHeader(),
-          // Expanded(child: _pages[_selectedIndex]),
-          Expanded( child: widget.customPage ?? _pages[_selectedIndex],),
-        ],
+        body: Column(
+          children: [
+            _buildHeader(),
+            // Expanded(child: _pages[_selectedIndex]),
+            // Expanded( child: widget.customPage ?? _pages[_selectedIndex],),
+            Expanded(
+              child:
+                  _customOrderPage ??
+                  (widget.customPage ?? _pages[_selectedIndex]),
+            ),
+          ],
+        ),
+
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          selectedItemColor: const Color(0xFF1B5E20),
+          unselectedItemColor: Colors.grey,
+          showUnselectedLabels: true,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard),
+              label: "Dashboard",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.fingerprint),
+              label: "Attendance",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.location_on),
+              label: "Visit",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.shopping_cart),
+              label: "Order",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.more_horiz),
+              label: "More",
+            ),
+          ],
+        ),
       ),
-
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        selectedItemColor: const Color(0xFF1B5E20),
-        unselectedItemColor: Colors.grey,
-        showUnselectedLabels: true,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: "Dashboard",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fingerprint),
-            label: "Attendance",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.location_on),
-            label: "Visit",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart),
-            label: "Order",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.more_horiz),
-            label: "More",
-          ),
-        ],
-      ),
-    ),
-  );
-}
+    );
+  }
 }

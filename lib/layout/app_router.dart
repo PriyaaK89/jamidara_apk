@@ -11,6 +11,7 @@ import '../pages/EmpProfile/attendance_report_page.dart';
 import '../pages/EmpProfile/salary_report_page.dart';
 import '../pages/EmpProfile/distributor_onbording_page.dart';
 import '../pages/profile_page.dart';
+import '../pages/my_team_page.dart';
 
 class AppRouter extends StatefulWidget {
   final int employeeId;
@@ -31,6 +32,7 @@ class AppRouter extends StatefulWidget {
 class _AppRouterState extends State<AppRouter> {
   int currentIndex = 0;
   String currentRoute = "dashboard";
+  Widget? customOrderPage;
 
   @override
   void initState() {
@@ -51,7 +53,9 @@ class _AppRouterState extends State<AppRouter> {
       case "order":
         currentIndex = 3;
         break;
-       
+       case "my_team":
+  currentIndex = 4;
+  break;
       case "quick_actions":
         currentIndex = 4;
         break;
@@ -93,7 +97,17 @@ class _AppRouterState extends State<AppRouter> {
         return const SalaryReportPage();
 
       case "order":
-        return const OrderPage();
+  return customOrderPage ??
+      OrderPage(
+        onOpenPage: (page) {
+          setState(() {
+            customOrderPage = page;
+          });
+        },
+      );
+      
+      case "my_team":
+  return const MyTeamPage();
 
       case "distributor_onboarding":
         return const DistributorOnboardingPage();
@@ -138,34 +152,40 @@ class _AppRouterState extends State<AppRouter> {
     }
   }
 
-  void onTabChange(int index) {
-    setState(() {
-      currentIndex = index;
+void onTabChange(int index) {
 
-      switch (index) {
-        case 0:
-          currentRoute = "dashboard";
-          break;
-        case 1:
-          currentRoute = "attendance";
-          break;
-        case 2:
-          currentRoute = "visit";
-          break;
-        case 3:
-          currentRoute = "order";
-          break;
-        case 4:
-          currentRoute = "quick_actions"; // IMPORTANT
-          break;
-          case 4:
-          currentRoute = "profile_page"; 
-          break;
-        default:
-          currentRoute = "dashboard";
-      }
-    });
-  }
+  setState(() {
+
+    currentIndex = index;
+    customOrderPage = null;
+
+    switch (index) {
+
+      case 0:
+        currentRoute = "dashboard";
+        break;
+
+      case 1:
+        currentRoute = "attendance";
+        break;
+
+      case 2:
+        currentRoute = "visit";
+        break;
+
+      case 3:
+        currentRoute = "order";
+        break;
+
+      case 4:
+        currentRoute = "quick_actions";
+        break;
+
+      default:
+        currentRoute = "dashboard";
+    }
+  });
+}
 
   void navigate(String route) {
     setState(() {
@@ -199,6 +219,14 @@ class _AppRouterState extends State<AppRouter> {
       currentRoute: currentRoute,
       onTabChange: onTabChange,
       child: getCurrentPage(),
+
+       isOrderSubPageOpen: customOrderPage != null,
+
+  onCloseOrderSubPage: () {
+    setState(() {
+      customOrderPage = null;
+    });
+  },
     );
   }
 }

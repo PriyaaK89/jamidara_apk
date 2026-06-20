@@ -13,6 +13,8 @@ class MainLayout extends StatefulWidget {
   final int currentIndex;
   final Function(int) onTabChange;
   final String currentRoute;
+  final bool isOrderSubPageOpen;
+  final VoidCallback? onCloseOrderSubPage;
 
   const MainLayout({
     super.key,
@@ -20,6 +22,8 @@ class MainLayout extends StatefulWidget {
     required this.currentIndex,
     required this.onTabChange,
     required this.currentRoute,
+    required this.isOrderSubPageOpen,
+    this.onCloseOrderSubPage,
   });
 
   @override
@@ -27,97 +31,72 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
+  // late VoidCallback _logoutListener;
 
-//   @override
-// void initState() {
-//   super.initState();
-//   _loadUserProfile();
-// }
-late VoidCallback _logoutListener;
-
-@override
-void initState() {
-  super.initState();
-
-  // _logoutListener = () {
-  //   if (AppState.forceLogout.value) {
-  //     AppState.forceLogout.value = false;
-  //     AuthService.logout(context); }
-  // };
-  // AppState.forceLogout.addListener(_logoutListener);
-
+  @override
+  void initState() {
+    super.initState();
     FlutterBackgroundService().on("forceLogout").listen((event) {
-    print(" Force logout received in UI");
+      print(" Force logout received in UI");
+      AuthService.logout(context);
+    });
+    _loadUserProfile();
+  }
 
-    AuthService.logout(context);
-  });
-
-  _loadUserProfile();
-}
-
-@override
-void dispose() {
-  AppState.forceLogout.removeListener(_logoutListener);
-  super.dispose();
-}
+  @override
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   void _openProfileMenu() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ProfileMenuPage(
-          clearSavedCredentialsOnLogout: false,
-        ),
+        builder: (_) => ProfileMenuPage(clearSavedCredentialsOnLogout: false),
       ),
     );
   }
 
   Widget _buildInitialAvatar(String name) {
-  return Container(
-    color: Colors.white,
-    alignment: Alignment.center,
-    child: Text(
-      name.isNotEmpty ? name[0].toUpperCase() : '',
-      style: const TextStyle(
-        color: Color(0xFF1B5E20),
-        fontWeight: FontWeight.bold,
-        fontSize: 18,
+    return Container(
+      color: Colors.white,
+      alignment: Alignment.center,
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : '',
+        style: const TextStyle(
+          color: Color(0xFF1B5E20),
+          fontWeight: FontWeight.bold,
+          fontSize: 18,
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Future<void> _loadUserProfile() async {
-  try {
-    if (UserService.user != null) return;
+    try {
+      if (UserService.user != null) return;
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token") ?? "";
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString("token") ?? "";
-
-    if (token.isEmpty) return;
-
-    final res = await ApiService.getMyProfile(token);
-
-    if (res["success"] == true) {
-      UserService.setUser(res["data"]);
-    } else {
-      debugPrint("Profile API failed");
+      if (token.isEmpty) return;
+      final res = await ApiService.getMyProfile(token);
+      if (res["success"] == true) {
+        UserService.setUser(res["data"]);
+      } else {
+        debugPrint("Profile API failed");
+      }
+    } catch (e) {
+      debugPrint("Profile load error: $e");
     }
-  } catch (e) {
-    debugPrint("Profile load error: $e");
   }
-}
 
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.only(top: 50, left: 16, right: 16, bottom: 16),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Color(0xFF255228),
-            Color(0xFF306E33),
-            Color(0xFF73A775),
-          ],
+          colors: [Color(0xFF255228), Color(0xFF306E33), Color(0xFF73A775)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -144,15 +123,11 @@ void dispose() {
               SizedBox(height: 4),
               Text(
                 "Corporation",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white70,
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.white70),
               ),
             ],
           ),
 
-          // Profile Icon
           InkWell(
             onTap: _openProfileMenu,
             borderRadius: BorderRadius.circular(30),
@@ -164,35 +139,33 @@ void dispose() {
                 shape: BoxShape.circle,
               ),
               child: ValueListenableBuilder<Map<String, dynamic>?>(
-  valueListenable: UserService.currentUser,
-  builder: (context, user, _) {
-    final imageUrl = user?['profile_image_url'];
-    final name = user?['name'] ?? '';
+                valueListenable: UserService.currentUser,
+                builder: (context, user, _) {
+                  final imageUrl = user?['profile_image_url'];
+                  final name = user?['name'] ?? '';
 
-    return InkWell(
-      onTap: _openProfileMenu,
-      borderRadius: BorderRadius.circular(30),
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-        ),
-        child: ClipOval(
-          child: (imageUrl != null && imageUrl.isNotEmpty)
-              ? Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return _buildInitialAvatar(name);
-                  },
-                )
-              : _buildInitialAvatar(name),
-        ),
-      ),
-    );
-  },
-),
+                  return InkWell(
+                    onTap: _openProfileMenu,
+                    borderRadius: BorderRadius.circular(30),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: const BoxDecoration(shape: BoxShape.circle),
+                      child: ClipOval(
+                        child: (imageUrl != null && imageUrl.isNotEmpty)
+                            ? Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return _buildInitialAvatar(name);
+                                },
+                              )
+                            : _buildInitialAvatar(name),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -203,62 +176,73 @@ void dispose() {
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-onWillPop: () async {
-  //  Expense Page → Quick Actions
-  if (widget.currentRoute == "expense") {
-    widget.onTabChange(4);
-    return false;
-  }
+      onWillPop: () async {
 
-  //  Visit Report → Profile Menu
-  if (widget.currentRoute == "visit_report") {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ProfileMenuPage(
-          clearSavedCredentialsOnLogout: false,
-        ),
-      ),
-    );
-    return false;
-  }
-
-  if (widget.currentRoute == "attendance_report") {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ProfileMenuPage(
-        clearSavedCredentialsOnLogout: false,
-      ),
-    ),
-  );
+if (widget.isOrderSubPageOpen) {
+  widget.onCloseOrderSubPage?.call();
   return false;
 }
 
-if (widget.currentRoute == "salary_report") {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ProfileMenuPage(
-        clearSavedCredentialsOnLogout: false,
-      ),
-    ),
-  );
-  return false;
-}
+        //  Expense Page → Quick Actions
+        if (widget.currentRoute == "expense") {
+          widget.onTabChange(4);
+          return false;
+        }
+        if (widget.currentRoute == "my_team") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
+            ),
+          );
 
-  //  Default tab behavior
-  if (widget.currentIndex != 0) {
-    widget.onTabChange(0);
-    return false;
-  } else {
-    SystemNavigator.pop();
-    return false;
-  }
-},
+          return false;
+        }
+
+        if (widget.currentRoute == "visit_report") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
+            ),
+          );
+          return false;
+        }
+
+        if (widget.currentRoute == "attendance_report") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
+            ),
+          );
+          return false;
+        }
+
+        if (widget.currentRoute == "salary_report") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
+            ),
+          );
+          return false;
+        }
+
+        if (widget.currentIndex != 0) {
+          widget.onTabChange(0);
+          return false;
+        } else {
+          SystemNavigator.pop();
+          return false;
+        }
+      },
       child: Scaffold(
         backgroundColor: const Color.fromARGB(255, 241, 245, 243),
-
         body: Column(
           children: [
             _buildHeader(),
@@ -274,11 +258,26 @@ if (widget.currentRoute == "salary_report") {
           unselectedItemColor: Colors.grey,
           showUnselectedLabels: true,
           items: const [
-            BottomNavigationBarItem( icon: Icon(Icons.dashboard), label: "Dashboard",),
-            BottomNavigationBarItem( icon: Icon(Icons.fingerprint), label: "Attendance",),
-            BottomNavigationBarItem( icon: Icon(Icons.location_on), label: "Visit",),
-            BottomNavigationBarItem( icon: Icon(Icons.shopping_cart), label: "Order", ),
-            BottomNavigationBarItem( icon: Icon(Icons.more_horiz), label: "More",),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard),
+              label: "Dashboard",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.fingerprint),
+              label: "Attendance",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.location_on),
+              label: "Visit",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.shopping_cart),
+              label: "Order",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.more_horiz),
+              label: "More",
+            ),
           ],
         ),
       ),

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
+import '../utils/sales_item.dart';
 
 class ApiService {
   // Login API
@@ -56,6 +57,8 @@ class ApiService {
     String? vehicleType,
     String? odometerReading,
     String? visitLocation,
+    String? leaveReason,
+
     File? selfie,
     File? odometerImage,
     required int employeeId,
@@ -83,6 +86,9 @@ class ApiService {
       } else {
         request.fields['visit_location'] = visitLocation;
       }
+    }
+    if (leaveReason != null) {
+      request.fields['leave_reason'] = leaveReason;
     }
 
     //  DO NOT SEND EMPTY ODOMETER
@@ -512,72 +518,64 @@ class ApiService {
     }
   }
 
-static Future<Map<String, dynamic>> uploadExpense({
-  required String expenseType,
-  required String expenseDate,
-  required String amount,
-  required String remarks,
-  required File billFile,
-}) async {
-  try {
-    final token = await StorageService.getToken();
-    final prefs = await SharedPreferences.getInstance();
-    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
-
-    final url = Uri.parse('$baseUrl${Endpoints.uploadExpenses}');
-    final request = http.MultipartRequest('POST', url);
-
-    request.headers['Authorization'] = 'Bearer $token';
-
-    request.fields['expense_type'] = expenseType;
-    request.fields['expense_date'] = expenseDate;
-    request.fields['amount'] = amount;
-    request.fields['remarks'] = remarks;
-
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'bill',
-        billFile.path,
-        contentType: MediaType('image', 'png'),
-      ),
-    );
-
-    //  ADD TIMEOUT HERE
-    var response = await request.send().timeout(
-      const Duration(seconds: 15),
-    );
-
-    var responseData = await response.stream.bytesToString();
-
-    print("STATUS: ${response.statusCode}");
-    print("BODY: $responseData");
-
-    Map<String, dynamic> decoded;
-
+  static Future<Map<String, dynamic>> uploadExpense({
+    required String expenseType,
+    required String expenseDate,
+    required String amount,
+    required String remarks,
+    required File billFile,
+  }) async {
     try {
-      decoded = jsonDecode(responseData);
-    } catch (e) {
-      //  HANDLE NON-JSON RESPONSE
+      final token = await StorageService.getToken();
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+      final url = Uri.parse('$baseUrl${Endpoints.uploadExpenses}');
+      final request = http.MultipartRequest('POST', url);
+
+      request.headers['Authorization'] = 'Bearer $token';
+
+      request.fields['expense_type'] = expenseType;
+      request.fields['expense_date'] = expenseDate;
+      request.fields['amount'] = amount;
+      request.fields['remarks'] = remarks;
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'bill',
+          billFile.path,
+          contentType: MediaType('image', 'png'),
+        ),
+      );
+
+      //  ADD TIMEOUT HERE
+      var response = await request.send().timeout(const Duration(seconds: 15));
+
+      var responseData = await response.stream.bytesToString();
+
+      print("STATUS: ${response.statusCode}");
+      print("BODY: $responseData");
+
+      Map<String, dynamic> decoded;
+
+      try {
+        decoded = jsonDecode(responseData);
+      } catch (e) {
+        //  HANDLE NON-JSON RESPONSE
+        return {"success": false, "message": "Server error (Invalid response)"};
+      }
+
       return {
-        "success": false,
-        "message": "Server error (Invalid response)",
+        "success": response.statusCode == 200 || response.statusCode == 201,
+        "message": decoded["message"] ?? "Something went wrong",
+        "data": decoded["data"],
       };
+    } catch (e) {
+      print("API ERROR: $e");
+
+      return {"success": false, "message": "Network/Server error"};
     }
-
-    return {
-      "success": response.statusCode == 200 || response.statusCode == 201,
-      "message": decoded["message"] ?? "Something went wrong",
-      "data": decoded["data"],
-    };
-  } catch (e) {
-    print("API ERROR: $e");
-
-    return {
-      "success": false,
-      "message": "Network/Server error",
-    };
   }
-}
 
   static Future<Map<String, dynamic>> getMyVisits({
     int page = 1,
@@ -867,39 +865,39 @@ static Future<Map<String, dynamic>> uploadExpense({
   }
 
   static Future<dynamic> updateUserStatus({
-  required String token,
-  required String internetStatus,
-  required String locationStatus,
-}) async {
-  final prefs = await SharedPreferences.getInstance();
-  final baseUrl = prefs.getString('FLUTTER_BASE_URL');
+    required String token,
+    required String internetStatus,
+    required String locationStatus,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL');
 
-  final response = await http.post(
-    Uri.parse('$baseUrl${Endpoints.updateUserStatus}'),
-    headers: {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-    },
-    body: jsonEncode({
-      "internet_status": internetStatus,
-      "location_status": locationStatus,
-    }),
-  );
+    final response = await http.post(
+      Uri.parse('$baseUrl${Endpoints.updateUserStatus}'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        "internet_status": internetStatus,
+        "location_status": locationStatus,
+      }),
+    );
 
-  //  HANDLE 403 HERE
-  if (response.statusCode == 403) {
-    return {
-      "forceLogout": true,
-      "message": jsonDecode(response.body)['message']
-    };
+    //  HANDLE 403 HERE
+    if (response.statusCode == 403) {
+      return {
+        "forceLogout": true,
+        "message": jsonDecode(response.body)['message'],
+      };
+    }
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+
+    throw Exception("API failed with status ${response.statusCode}");
   }
-
-  if (response.statusCode == 200) {
-    return jsonDecode(response.body);
-  }
-
-  throw Exception("API failed with status ${response.statusCode}");
-}
 
   // Initiate Aadhaar KYC
   static Future<Map<String, dynamic>> sendForAadharKYC({
@@ -973,67 +971,317 @@ static Future<Map<String, dynamic>> uploadExpense({
   }
 
   static Future<Map<String, dynamic>> getMyProfile(String token) async {
-  final prefs = await SharedPreferences.getInstance();
-  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
-  final url = Uri.parse('$baseUrl${Endpoints.getMe}');
-  try {
-    final response = await http.get(
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    final url = Uri.parse('$baseUrl${Endpoints.getMe}');
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final responseData = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return responseData;
+      } else {
+        return {
+          "success": false,
+          "message": responseData['message'] ?? 'Failed to fetch profile',
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "Exception: $e"};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateMyProfile(
+    String token,
+    File imageFile,
+  ) async {
+    final pref = await SharedPreferences.getInstance();
+    final baseUrl = pref.getString("FLUTTER_BASE_URL") ?? '';
+    final url = Uri.parse('$baseUrl${Endpoints.updateProfileImage}');
+
+    try {
+      var request = http.MultipartRequest('PUT', url);
+
+      request.headers['Authorization'] = 'Bearer $token';
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'profile_image', //  key name
+          imageFile.path,
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
+
+      var response = await request.send();
+      var responseBody = await response.stream.bytesToString();
+      final data = jsonDecode(responseBody);
+
+      if (response.statusCode == 200) {
+        return data;
+      } else {
+        return {
+          "success": false,
+          "message": data['message'] ?? 'Upload failed',
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "Exception: $e"};
+    }
+  }
+
+  // CREATE TARGET
+  static Future<Map<String, dynamic>> createTarget(Map body) async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    final token = await StorageService.getToken();
+    final url = Uri.parse('$baseUrl${Endpoints.createTarget}');
+
+    final response = await http.post(
       url,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
+      body: jsonEncode(body),
     );
 
-    final responseData = jsonDecode(response.body);
-    if (response.statusCode == 200) {
-      return responseData;
-    } else {
-      return {
-        "success": false,
-        "message": responseData['message'] ?? 'Failed to fetch profile',
-      };
-    }
-  } catch (e) {
-    return {"success": false, "message": "Exception: $e"};
+    return jsonDecode(response.body);
   }
-}
 
-static Future<Map<String, dynamic>> updateMyProfile(
-  String token,
-  File imageFile,
-) async {
-  final pref = await SharedPreferences.getInstance();
-  final baseUrl = pref.getString("FLUTTER_BASE_URL") ?? '';
-  final url = Uri.parse('$baseUrl${Endpoints.updateProfileImage}');
+  // GET MY TARGETS
+  static Future<List<dynamic>> getMyTargets() async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    final token = await StorageService.getToken();
+    final url = Uri.parse('$baseUrl${Endpoints.myTargets}');
 
-  try {
-    var request = http.MultipartRequest('PUT', url);
-
-    request.headers['Authorization'] = 'Bearer $token';
-
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'profile_image', //  key name
-        imageFile.path,
-        contentType: MediaType('image', 'jpeg'),
-      ),
+    final response = await http.get(
+      url,
+      headers: {'Authorization': 'Bearer $token'},
     );
 
-    var response = await request.send();
-    var responseBody = await response.stream.bytesToString();
-    final data = jsonDecode(responseBody);
+    final data = jsonDecode(response.body);
+    return data['data'];
+  }
 
-    if (response.statusCode == 200) {
-      return data;
-    } else {
-      return {
-        "success": false,
-        "message": data['message'] ?? 'Upload failed'
-      };
+  static Future<Map<String, dynamic>> getMyTeam(String token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+      final url = Uri.parse('$baseUrl${Endpoints.getMyTeam}');
+
+      final response = await http.get(
+        url,
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {"success": true, "data": data};
+      }
+
+      return {"success": false, "message": data["message"] ?? "Failed"};
+    } catch (e) {
+      return {"success": false, "message": e.toString()};
     }
+  }
+
+  static Future<Map<String, dynamic>> getTodayAttendance(
+    int employeeId,
+    String token,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+      final url = Uri.parse('$baseUrl/today-attendance/$employeeId');
+
+      debugPrint("TODAY ATTENDANCE URL: $url");
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      debugPrint("TODAY ATTENDANCE RESPONSE: $responseData");
+
+      if (response.statusCode == 200) {
+        return responseData;
+      } else {
+        return {
+          "success": false,
+          "message": responseData['message'] ?? 'Failed to fetch attendance',
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "Exception occurred: $e"};
+    }
+  }
+
+  static Future<Map<String, dynamic>> createSalesApprovalRequest({
+    required int ledgerId,
+    required bool isConsignee,
+    required bool isSupercash,
+    required String narration,
+
+    String? dealerName,
+    String? proprietorName,
+    String? consigneeContactNo,
+    String? consigneeAddress,
+    String? consigneeGstnNo,
+
+    required double subtotal,
+    required double taxTotal,
+    required double totalAmount,
+
+    required List<SalesItem> items,
+
+    required File orderBillImage,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+
+      final token = await StorageService.getToken();
+
+      var request = http.MultipartRequest(
+        "POST",
+        Uri.parse("$baseUrl${Endpoints.createSalesApprovalRequest}"),
+      );
+
+      request.headers.addAll({"Authorization": "Bearer $token"});
+
+      final payload = {
+        "customer_ledger_id": ledgerId,
+
+        "is_consignee": isConsignee ? 1 : 0,
+
+        "dealer_name": dealerName ?? "",
+        "proprietor_name": proprietorName ?? "",
+        "consignee_contact_no": consigneeContactNo ?? "",
+        "consignee_address": consigneeAddress ?? "",
+        "consignee_gstn_no": consigneeGstnNo ?? "",
+
+        "is_supercash_sale": isSupercash ? 1 : 0,
+
+        "subtotal": subtotal,
+        "tax_total": taxTotal,
+        "total_amount": totalAmount,
+
+        "narration": narration,
+
+        "items": items.map((e) => e.toJson()).toList(),
+      };
+
+      payload.forEach((key, value) {
+        request.fields[key] = jsonEncode(value);
+      });
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          "orderBillImage",
+          orderBillImage.path,
+        ),
+      );
+
+      final response = await request.send();
+
+      final body = await response.stream.bytesToString();
+
+      return jsonDecode(body);
+    } catch (e) {
+      return {"success": false, "message": e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getStockItemById(int id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+
+      final token = await StorageService.getToken();
+
+      final response = await http.get(
+        Uri.parse("$baseUrl${Endpoints.getStockItemDetailsById}/$id"),
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {"success": false, "message": e.toString()};
+    }
+  }
+
+  static Future<List<dynamic>> getStockItems() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+
+      final token = await StorageService.getToken();
+
+      final response = await http.get(
+        Uri.parse("$baseUrl${Endpoints.getStockItemsList}"),
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      final json = jsonDecode(response.body);
+
+      return json["data"] ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<List<dynamic>> getMyAssignedLedgers() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+
+    final baseUrl =
+        prefs.getString("FLUTTER_BASE_URL") ?? "";
+
+    final token =
+        await StorageService.getToken();
+
+    final response = await http.get(
+      Uri.parse(
+        "$baseUrl${Endpoints.getMyAssignedLedgers}",
+      ),
+      headers: {
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    final json = jsonDecode(response.body);
+
+    if (json["success"] == true) {
+      return json["data"] ?? [];
+    }
+
+    return [];
   } catch (e) {
-    return {"success": false, "message": "Exception: $e"};
+    debugPrint(e.toString());
+    return [];
   }
 }
 }

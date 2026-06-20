@@ -112,7 +112,14 @@ print("LOGIN SAVED → ID: $employeeId, TOKEN: $token");
           (route) => false,
           arguments: {"employeeId": employeeId, "token": token},
         );
-        await StorageService.saveUser(token, employeeId);
+          await StorageService.saveUser(token, employeeId);
+
+ 
+  await StorageService.saveFullUser(
+    token,
+    employeeId,
+    response['user'],
+  );
         await Flushbar(
           message: "Login Successful",
           duration: const Duration(seconds: 1),

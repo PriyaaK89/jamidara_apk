@@ -4,7 +4,7 @@ import '../pages/attendance_page.dart';
 import '../layout/app_router.dart';
 
 class AppRoutes {
-  static const String welcome = '/welcome';
+  static const String welcome = '/';
   static const String attendance = '/attendance';
   static const String appRouter = '/app-router';
 

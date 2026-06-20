@@ -22,5 +22,13 @@ class Endpoints {
   static const String getDetailsFromAadhar = '/kyc-status';
   static const String getMe = '/auth/my-profile';
   static const String updateProfileImage = '/auth/upload-profile-image';
+  static const String createTarget = '/create-target';
+  static const String myTargets = '/my-targets';
+  static const String getMyTeam = '/my-team';
+  static const String createSalesApprovalRequest = "/create-sales-approval-request";
+  static const String getMyAssignedLedgers = "/get-my-assigned-ledgers";
+  static const String getStockItemsList = "/get-stock-items/dropdown";
+  static const String getStockItemDetailsById = "/getstockItemByID";
+
 
 }

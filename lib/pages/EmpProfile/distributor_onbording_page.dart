@@ -884,6 +884,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
       currentIndex: 4,
       currentRoute: "distributor_onboarding",
       onTabChange: (i) => Navigator.pop(context),
+       isOrderSubPageOpen: false,
 
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),

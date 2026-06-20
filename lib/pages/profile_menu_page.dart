@@ -8,6 +8,7 @@ import '../services/user_service.dart';
 import '../services/api_service.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import '../pages/my_team_page.dart';
 
 class ProfileMenuPage extends StatefulWidget {
   final bool clearSavedCredentialsOnLogout;
@@ -68,7 +69,7 @@ Future<void> _pickImage() async {
     final res = await ApiService.updateMyProfile(token, selectedImage!);
 
     if (res["success"] == true) {
-      /// 🔥 IMPORTANT FIX HERE
+      ///  IMPORTANT FIX HERE
       final currentUser = UserService.user;
 
       if (currentUser != null) {
@@ -277,7 +278,7 @@ Future<void> _pickImage() async {
                               ),
                             ),
 
-                            /// 📸 Camera Icon
+                            ///  Camera Icon
                             Positioned(
                               bottom: 0,
                               right: 0,
@@ -356,6 +357,29 @@ Future<void> _pickImage() async {
                         );
                       },
                     ),
+
+                    _buildTile(
+  context: context,
+  icon: Icons.groups,
+  title: 'My Team',
+  subtitle: 'View your Team Members',
+  onTap: () async{
+     Navigator.pop(context);
+final token = await StorageService.getToken();
+
+final employeeId = await StorageService.getEmployeeId();
+  Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) => AppRouter(
+      employeeId: employeeId!,
+      token: token!,
+      initialRoute: "my_team",
+    ),
+  ),
+);
+  },
+),
                     _buildTile(
                       context: context,
                       icon: Icons.fingerprint,
@@ -445,13 +469,6 @@ Future<void> _pickImage() async {
                       icon: Icons.support_agent,
                       title: 'Help & Support',
                       subtitle: 'Contact office/admin support',
-                      onTap: () {},
-                    ),
-                    _buildTile(
-                      context: context,
-                      icon: Icons.info_outline,
-                      title: 'App Info',
-                      subtitle: 'Version and company details',
                       onTap: () {},
                     ),
 

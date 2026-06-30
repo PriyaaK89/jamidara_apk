@@ -233,6 +233,17 @@ if (widget.isOrderSubPageOpen) {
           return false;
         }
 
+        if (widget.currentRoute == "team_visit_report") {
+  Navigator.pushReplacement(
+    context,
+    MaterialPageRoute(
+      builder: (_) =>
+          ProfileMenuPage(clearSavedCredentialsOnLogout: false),
+    ),
+  );
+  return false;
+}
+
         if (widget.currentIndex != 0) {
           widget.onTabChange(0);
           return false;

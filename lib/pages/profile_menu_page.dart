@@ -9,6 +9,7 @@ import '../services/api_service.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../pages/my_team_page.dart';
+import "../pages/EmpProfile/team_visit_report_page.dart";
 
 class ProfileMenuPage extends StatefulWidget {
   final bool clearSavedCredentialsOnLogout;
@@ -27,72 +28,72 @@ class ProfileMenuPage extends StatefulWidget {
 class _ProfileMenuPageState extends State<ProfileMenuPage> {
   File? selectedImage;
 
-Future<void> _pickImage() async {
-  final picker = ImagePicker();
-  final picked = await picker.pickImage(source: ImageSource.gallery);
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
 
-  if (picked != null) {
-    selectedImage = File(picked.path);
-    _showConfirmDialog();
+    if (picked != null) {
+      selectedImage = File(picked.path);
+      _showConfirmDialog();
+    }
   }
-}
 
   Future<void> _showConfirmDialog() async {
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text("Update Profile"),
-      content: const Text("Are you sure you want to update profile image?"),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text("Cancel"),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text("Yes"),
-        ),
-      ],
-    ),
-  );
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Update Profile"),
+        content: const Text("Are you sure you want to update profile image?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes"),
+          ),
+        ],
+      ),
+    );
 
-  if (confirm == true && selectedImage != null) {
-    await _uploadImage();
+    if (confirm == true && selectedImage != null) {
+      await _uploadImage();
+    }
   }
-}
 
   Future<void> _uploadImage() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString("token") ?? "";
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token") ?? "";
 
-    final res = await ApiService.updateMyProfile(token, selectedImage!);
+      final res = await ApiService.updateMyProfile(token, selectedImage!);
 
-    if (res["success"] == true) {
-      ///  IMPORTANT FIX HERE
-      final currentUser = UserService.user;
+      if (res["success"] == true) {
+        ///  IMPORTANT FIX HERE
+        final currentUser = UserService.user;
 
-      if (currentUser != null) {
-        UserService.setUser({
-          ...currentUser,
-          "profile_image_url": res["profile_image"], // update image only
-        });
-      }
+        if (currentUser != null) {
+          UserService.setUser({
+            ...currentUser,
+            "profile_image_url": res["profile_image"], // update image only
+          });
+        }
 
-      if (mounted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Profile updated successfully")),
+          );
+        }
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Profile updated successfully")),
+          SnackBar(content: Text(res["message"] ?? "Upload failed")),
         );
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res["message"] ?? "Upload failed")),
-      );
+    } catch (e) {
+      debugPrint("Upload error: $e");
     }
-  } catch (e) {
-    debugPrint("Upload error: $e");
   }
-}
 
   Future<void> _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
@@ -359,27 +360,27 @@ Future<void> _pickImage() async {
                     ),
 
                     _buildTile(
-  context: context,
-  icon: Icons.groups,
-  title: 'My Team',
-  subtitle: 'View your Team Members',
-  onTap: () async{
-     Navigator.pop(context);
-final token = await StorageService.getToken();
+                      context: context,
+                      icon: Icons.groups,
+                      title: 'My Team',
+                      subtitle: 'View your Team Members',
+                      onTap: () async {
+                        Navigator.pop(context);
+                        final token = await StorageService.getToken();
 
-final employeeId = await StorageService.getEmployeeId();
-  Navigator.push(
-  context,
-  MaterialPageRoute(
-    builder: (_) => AppRouter(
-      employeeId: employeeId!,
-      token: token!,
-      initialRoute: "my_team",
-    ),
-  ),
-);
-  },
-),
+                        final employeeId = await StorageService.getEmployeeId();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AppRouter(
+                              employeeId: employeeId!,
+                              token: token!,
+                              initialRoute: "my_team",
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                     _buildTile(
                       context: context,
                       icon: Icons.fingerprint,
@@ -429,6 +430,22 @@ final employeeId = await StorageService.getEmployeeId();
                     _buildTile(
                       context: context,
                       icon: Icons.flag_outlined,
+                      title: 'My Team Visit',
+                      subtitle: 'View Visits of Assigned Team Members',
+                      onTap: () async {
+                        Navigator.pop(context);
+                        final level = await StorageService.getJobRoleLevel();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TeamVisitReportPage(myLevel: level),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildTile(
+                      context: context,
+                      icon: Icons.flag_outlined,
                       title: 'My Targets',
                       subtitle: 'View assigned targets and progress',
                       onTap: () {},
@@ -463,13 +480,6 @@ final employeeId = await StorageService.getEmployeeId();
                           ),
                         );
                       },
-                    ),
-                    _buildTile(
-                      context: context,
-                      icon: Icons.support_agent,
-                      title: 'Help & Support',
-                      subtitle: 'Contact office/admin support',
-                      onTap: () {},
                     ),
 
                     const SizedBox(height: 14),

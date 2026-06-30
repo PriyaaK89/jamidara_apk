@@ -1,14 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-
 import '../../services/api_service.dart';
 import '../../utils/sales_item.dart';
 import '../../widgets/searchable_field.dart'; // adjust path to your project structure
 
 class SalesOrderPage extends StatefulWidget {
   const SalesOrderPage({super.key});
-
   @override
   State<SalesOrderPage> createState() => _SalesOrderPageState();
 }
@@ -80,6 +78,8 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
     }
   }
 
+  
+
   // ---------------- Image ----------------
 
   Future<void> pickImage(ImageSource source) async {
@@ -105,10 +105,12 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
   }
 
   void _recalculateItem(SalesItem item) {
-    final effectiveRate = isSupercash ? item.supercashRate : item.rate;
-    item.amount = item.billedQty * effectiveRate;
-    item.totalAmount = item.amount;
-  }
+  final effectiveRate = isSupercash ? item.supercashRate : item.rate;
+  item.amount = item.billedQty * effectiveRate;
+
+  final taxPercent = item.cgstPercent + item.sgstPercent + item.igstPercent;
+  item.totalAmount = item.amount + (item.amount * taxPercent / 100);
+}
 
   void onQtyChanged(SalesItem item, String value) {
     setState(() {
@@ -126,8 +128,17 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
     });
   }
 
+  void _applyGstSelection(SalesItem item) {
+  if (item.igstPercent > 0) {
+    item.cgstPercent = 0;
+    item.sgstPercent = 0;
+  } else {
+    item.igstPercent = 0;
+  }
+}
+
   void showImageSourceSheet() {
-     FocusScope.of(context).requestFocus(FocusNode());
+    FocusScope.of(context).requestFocus(FocusNode());
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -228,8 +239,9 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
       row.cgstPercent = _toDouble(gstDetails?["central_tax"]);
       row.sgstPercent = _toDouble(gstDetails?["state_tax"]);
       row.igstPercent = _toDouble(gstDetails?["integrated_tax"]);
+      _applyGstSelection(row);   // <-- add this line
+_recalculateItem(row);
 
-      _recalculateItem(row);
 
       if (mounted) setState(() {});
     } catch (e) {
@@ -244,96 +256,92 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
   }
 
   double getTaxTotal() {
-    double total = 0;
-    for (var item in salesItems) {
-      total += item.amount * item.cgstPercent / 100;
-      total += item.amount * item.sgstPercent / 100;
-      total += item.amount * item.igstPercent / 100;
-    }
-    return total;
+  double total = 0;
+  for (var item in salesItems) {
+    final taxPercent = item.cgstPercent + item.sgstPercent + item.igstPercent;
+    total += item.amount * taxPercent / 100;
   }
+  return total;
+}
 
   double getGrandTotal() => getSubTotal() + getTaxTotal();
 
   // ---------------- Consignee dialog ----------------
 
-void showConsigneeDialog() {
-  // Steal focus onto a throwaway node before opening the dialog.
-  // unfocus() alone isn't enough - the ledger field's FocusScope still
-  // remembers it as the "focused child" and Flutter auto-restores focus
-  // to it the moment this dialog is popped, which reopens its dropdown.
-  // Requesting focus on a fresh, unattached node clears that memory.
-  FocusScope.of(context).requestFocus(FocusNode());
+  void showConsigneeDialog() {
+    FocusScope.of(context).requestFocus(FocusNode());
 
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-        title: const Text("Consignee Details"),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: dealerController,
-                decoration: const InputDecoration(labelText: "Dealer Name"),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: proprietorController,
-                decoration: const InputDecoration(labelText: "Proprietor Name"),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: consigneeContactController,
-                decoration: const InputDecoration(labelText: "Contact"),
-                keyboardType: TextInputType.phone,
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: consigneeAddressController,
-                decoration: const InputDecoration(labelText: "Address"),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: consigneeGstController,
-                decoration: const InputDecoration(labelText: "GST Number"),
-              ),
-            ],
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Save"),
+          title: const Text("Consignee Details"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: dealerController,
+                  decoration: const InputDecoration(labelText: "Dealer Name"),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: proprietorController,
+                  decoration: const InputDecoration(
+                    labelText: "Proprietor Name",
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: consigneeContactController,
+                  decoration: const InputDecoration(labelText: "Contact"),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: consigneeAddressController,
+                  decoration: const InputDecoration(labelText: "Address"),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: consigneeGstController,
+                  decoration: const InputDecoration(labelText: "GST Number"),
+                ),
+              ],
+            ),
           ),
-        ],
-      );
-    },
-  );
-}
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Save"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   // ---------------- Submit ----------------
 
   void _resetForm() {
-  setState(() {
-    selectedLedger = null;
-    isConsignee = false;
-    isSupercash = false;
-    orderBillImage = null;
-    salesItems = [SalesItem()];
-    narrationController.clear();
-    dealerController.clear();
-    proprietorController.clear();
-    consigneeContactController.clear();
-    consigneeAddressController.clear();
-    consigneeGstController.clear();
-  });
-}
+    setState(() {
+      selectedLedger = null;
+      isConsignee = false;
+      isSupercash = false;
+      orderBillImage = null;
+      salesItems = [SalesItem()];
+      narrationController.clear();
+      dealerController.clear();
+      proprietorController.clear();
+      consigneeContactController.clear();
+      consigneeAddressController.clear();
+      consigneeGstController.clear();
+    });
+  }
 
   void _showSnack(String message) {
     if (!mounted) return;
@@ -343,12 +351,12 @@ void showConsigneeDialog() {
   }
 
   String _formatAmount(dynamic value) {
-  final number = double.tryParse(value?.toString() ?? '') ?? 0;
-  if (number == number.roundToDouble()) {
-    return number.toStringAsFixed(0); // 10000.00 -> "10000"
+    final number = double.tryParse(value?.toString() ?? '') ?? 0;
+    if (number == number.roundToDouble()) {
+      return number.toStringAsFixed(0); // 10000.00 -> "10000"
+    }
+    return number.toStringAsFixed(2); // 10000.50 -> "10000.50"
   }
-  return number.toStringAsFixed(2); // 10000.50 -> "10000.50"
-}
 
   Future<void> submitSalesOrder() async {
     if (selectedLedger == null) {
@@ -396,25 +404,27 @@ void showConsigneeDialog() {
     if (!mounted) return;
     setState(() => isSubmitting = false);
 
-   if (response["success"] == true) {
-  _showSnack(response["message"]?.toString() ?? "Sales order generated successfully");
+    if (response["success"] == true) {
+      _showSnack(
+        response["message"]?.toString() ?? "Sales order generated successfully",
+      );
 
-  // Let the SnackBar actually be seen before we navigate away -
-  // popping immediately tears down this Scaffold along with it.
-  await Future.delayed(const Duration(seconds: 2));
+      // Let the SnackBar actually be seen before we navigate away -
+      // popping immediately tears down this Scaffold along with it.
+      await Future.delayed(const Duration(seconds: 2));
 
-  if (!mounted) return;
+      if (!mounted) return;
 
-  if (Navigator.canPop(context)) {
-    Navigator.pop(context, true);
-  } else {
-    // Nothing to go back to (e.g. this page is a tab, not a pushed route).
-    // Reset the form instead of leaving a black screen.
-    _resetForm();
-  }
-} else {
-  _showSnack(response["message"]?.toString() ?? "Submission failed");
-}
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context, true);
+      } else {
+        // Nothing to go back to (e.g. this page is a tab, not a pushed route).
+        // Reset the form instead of leaving a black screen.
+        _resetForm();
+      }
+    } else {
+      _showSnack(response["message"]?.toString() ?? "Submission failed");
+    }
   }
 
   // ---------------- UI ----------------
@@ -433,34 +443,31 @@ void showConsigneeDialog() {
 
         elevation: 0,
       ),
-floatingActionButton: SizedBox(
-  height: 42,
-  child: Container(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(16),
-      gradient: const LinearGradient(
-        colors: [
-          Color.fromARGB(255, 97, 180, 104),
-          Color.fromARGB(255, 40, 119, 20),
-        ],
-      ),
-    ),
-    child: FloatingActionButton.extended(
-      onPressed: addItemRow,
-      backgroundColor: Colors.transparent,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      icon: const Icon(Icons.add_rounded, size: 16),
-      label: const Text(
-        "Add Item",
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
+      floatingActionButton: SizedBox(
+        height: 42,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(
+              colors: [
+                Color.fromARGB(255, 97, 180, 104),
+                Color.fromARGB(255, 40, 119, 20),
+              ],
+            ),
+          ),
+          child: FloatingActionButton.extended(
+            onPressed: addItemRow,
+            backgroundColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            icon: const Icon(Icons.add_rounded, size: 16),
+            label: const Text(
+              "Add Item",
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
         ),
       ),
-    ),
-  ),
-),
       body: isLoadingInitial
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -583,32 +590,32 @@ floatingActionButton: SizedBox(
               ),
             ),
             if (selectedLedger != null) ...[
-  const SizedBox(height: 12),
-  Row(
-    children: [
-      Expanded(
-        child: _infoCard(
-          "Opening",
-          "₹${_formatAmount(selectedLedger!["opening_balance"])}",
-        ),
-      ),
-      const SizedBox(width: 6),
-      Expanded(
-        child: _infoCard(
-          "Security Amt.",
-          "₹${_formatAmount(selectedLedger!["security_amount"])}",
-        ),
-      ),
-      const SizedBox(width: 6),
-      Expanded(
-        child: _infoCard(
-          "Credit Limit",
-          "₹${_formatAmount(selectedLedger!["credit_limit"])}",
-        ),
-      ),
-    ],
-  ),
-],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _infoCard(
+                      "Opening",
+                      "₹${_formatAmount(selectedLedger!["opening_balance"])}",
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _infoCard(
+                      "Security Amt.",
+                      "₹${_formatAmount(selectedLedger!["security_amount"])}",
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _infoCard(
+                      "Credit Limit",
+                      "₹${_formatAmount(selectedLedger!["credit_limit"])}",
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -621,46 +628,39 @@ floatingActionButton: SizedBox(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
- ListTile(
-  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-  leading: const Icon(Icons.local_shipping_outlined, size: 18),
-  title: Text(
-    "Is Consignee",
-    style: TextStyle(fontSize: 14),
-  ),
-  trailing: Transform.scale(
-    scale: 0.8,
-    child: Switch(
-      activeColor: Colors.green,
-      value: isConsignee,
-      onChanged: (value) {
-        setState(() => isConsignee = value);
-        if (value) {
-          showConsigneeDialog();
-        }
-      },
-    ),
-  ),
-),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            leading: const Icon(Icons.local_shipping_outlined, size: 18),
+            title: Text("Is Consignee", style: TextStyle(fontSize: 14)),
+            trailing: Transform.scale(
+              scale: 0.8,
+              child: Switch(
+                activeColor: Colors.green,
+                value: isConsignee,
+                onChanged: (value) {
+                  setState(() => isConsignee = value);
+                  if (value) {
+                    showConsigneeDialog();
+                  }
+                },
+              ),
+            ),
+          ),
 
           const Divider(height: 1),
           ListTile(
-  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-  leading: const Icon(Icons.savings_outlined, size: 18),
-  title: Text(
-    "Supercash Sale",
-    style: TextStyle(fontSize: 14),
-  ),
-  trailing: Transform.scale(
-    scale: 0.8,
-    child: Switch(
-      activeColor: Colors.green,
-      value: isSupercash,
-       onChanged: onSupercashToggle,
-    ),
-  ),
-),
-        
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            leading: const Icon(Icons.savings_outlined, size: 18),
+            title: Text("Supercash Sale", style: TextStyle(fontSize: 14)),
+            trailing: Transform.scale(
+              scale: 0.8,
+              child: Switch(
+                activeColor: Colors.green,
+                value: isSupercash,
+                onChanged: onSupercashToggle,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -840,10 +840,12 @@ floatingActionButton: SizedBox(
                         ),
                       ),
                       _smallChip("Unit", item.unitName),
-                      _smallChip(
-                        "GST",
-                        "${item.totalGstPercent.toStringAsFixed(1)}%",
-                      ),
+                      if (item.igstPercent > 0)
+  _smallChip("IGST", "${item.igstPercent.toStringAsFixed(1)}%")
+else ...[
+  _smallChip("CGST", "${item.cgstPercent.toStringAsFixed(1)}%"),
+  _smallChip("SGST", "${item.sgstPercent.toStringAsFixed(1)}%"),
+],
                       // _smallChip("Available", item.availableQty.toStringAsFixed(2)),
                       // if (item.batchNo.isNotEmpty) _smallChip("Batch", item.batchNo),
                     ],
@@ -858,7 +860,7 @@ floatingActionButton: SizedBox(
                   ),
                   decoration: InputDecoration(
                     labelText: "Billed Qty",
-                    labelStyle: const TextStyle( fontSize: 13,),
+                    labelStyle: const TextStyle(fontSize: 13),
                     isDense: true,
                     filled: true,
                     fillColor: Colors.white,
@@ -891,15 +893,8 @@ floatingActionButton: SizedBox(
                         "Amount",
                         style: TextStyle(fontWeight: FontWeight.w500),
                       ),
-                        //  _summaryRow("Grand Total", getGrandTotal(), isBold: true),
-                      Text(
-                        "₹${getGrandTotal()}",
-                          
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
+                      //  _summaryRow("Grand Total", getGrandTotal(), isBold: true),
+                     Text("₹${item.totalAmount.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
                   ),
                 ),
@@ -1010,13 +1005,7 @@ floatingActionButton: SizedBox(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
-          children: [
-            // _summaryRow("Subtotal", getSubTotal()),
-            // const SizedBox(height: 6),
-            // _summaryRow("Tax", getTaxTotal()),
-            // const Divider(height: 20),
-            _summaryRow("Grand Total", getGrandTotal(), isBold: true),
-          ],
+          children: [_summaryRow("Grand Total", getGrandTotal(), isBold: true)],
         ),
       ),
     );

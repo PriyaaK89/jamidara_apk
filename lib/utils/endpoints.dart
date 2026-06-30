@@ -29,6 +29,9 @@ class Endpoints {
   static const String getMyAssignedLedgers = "/get-my-assigned-ledgers";
   static const String getStockItemsList = "/get-stock-items/dropdown";
   static const String getStockItemDetailsById = "/getstockItemByID";
+  static const String getUsersbySelectedLevel = "/users-by-level";
+  static const String viewVisitByHirarchy = "/hierarchy-visits";
+  static const String getVisitDetailsByID = "/get-hierarchy-visits";
 
 
 }

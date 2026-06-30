@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../services/api_service.dart';
 
 class MyTeamPage extends StatefulWidget {
@@ -19,10 +18,25 @@ class _MyTeamPageState extends State<MyTeamPage> {
 
   List team = [];
 
+  // ── theme palette ──
+  static const Color _kPrimaryGreen = Color(0xFF2E7D32);
+  static const Color _kDarkGreen = Color(0xFF1B5E20);
+  static const Color _kBg = Color(0xFFF4F6F5);
+  static const Color _kCard = Colors.white;
+  static const Color _kInk = Color(0xFF1A1A1A);
+  static const Color _kBorder = Color(0xFFE6E8EA);
+
   @override
   void initState() {
     super.initState();
     fetchTeam();
+  }
+
+  int _levelOf(dynamic user) =>
+      int.tryParse(user["level"].toString()) ?? 999;
+
+  void _sortByLevel(List list) {
+    list.sort((a, b) => _levelOf(a).compareTo(_levelOf(b)));
   }
 
   Future<void> fetchTeam() async {
@@ -36,10 +50,17 @@ class _MyTeamPageState extends State<MyTeamPage> {
       if (response["success"] == true) {
         final data = response["data"];
 
+        final fetchedManagers = List.from(data["managers"] ?? []);
+        final fetchedTeam = List.from(data["team"] ?? []);
+
+        // Higher levels (lower level number) shown first
+        _sortByLevel(fetchedManagers);
+        _sortByLevel(fetchedTeam);
+
         setState(() {
           currentUser = data["current_user"];
-          managers = data["managers"] ?? [];
-          team = data["team"] ?? [];
+          managers = fetchedManagers;
+          team = fetchedTeam;
           isLoading = false;
         });
       } else {
@@ -86,28 +107,17 @@ class _MyTeamPageState extends State<MyTeamPage> {
   final Color roleColor = getRoleColor(level);
 
   return Container(
-    margin: const EdgeInsets.only(bottom: 14),
+    margin: const EdgeInsets.only(bottom: 12),
 
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(18),
-
-      gradient: LinearGradient(
-        colors: isManager
-            ? [
-                Colors.blue.shade50,
-                Colors.white,
-              ]
-            : [
-                Colors.green.shade50,
-                Colors.white,
-              ],
-      ),
-
+      color: _kCard,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: _kBorder),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.05),
+          color: Colors.black.withValues(alpha: 0.03),
           blurRadius: 10,
-          offset: const Offset(0, 4),
+          offset: const Offset(0, 3),
         ),
       ],
     ),
@@ -120,12 +130,13 @@ class _MyTeamPageState extends State<MyTeamPage> {
 
           // Avatar
           Container(
-            width: 60,
-            height: 60,
+            width: 54,
+            height: 54,
 
             decoration: BoxDecoration(
-              color: roleColor,
+              color: roleColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
+              border: Border.all(color: roleColor.withValues(alpha: 0.25)),
             ),
 
             alignment: Alignment.center,
@@ -133,10 +144,10 @@ class _MyTeamPageState extends State<MyTeamPage> {
             child: Text(
               name.isNotEmpty ? name[0].toUpperCase() : "U",
 
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: roleColor,
                 fontWeight: FontWeight.bold,
-                fontSize: 22,
+                fontSize: 20,
               ),
             ),
           ),
@@ -156,8 +167,9 @@ class _MyTeamPageState extends State<MyTeamPage> {
                   overflow: TextOverflow.ellipsis,
 
                   style: const TextStyle(
-                    fontSize: 17,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
+                    color: _kInk,
                   ),
                 ),
 
@@ -166,11 +178,11 @@ class _MyTeamPageState extends State<MyTeamPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
-                    vertical: 5,
+                    vertical: 4,
                   ),
 
                   decoration: BoxDecoration(
-                    color: roleColor.withValues(alpha: 0.12),
+                    color: roleColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(30),
                   ),
 
@@ -180,20 +192,20 @@ class _MyTeamPageState extends State<MyTeamPage> {
                     style: TextStyle(
                       color: roleColor,
                       fontWeight: FontWeight.w600,
-                      fontSize: 12,
+                      fontSize: 11,
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
 
                 Row(
                   children: [
 
-                    const Icon(
+                    Icon(
                       Icons.call,
-                      size: 16,
-                      color: Colors.grey,
+                      size: 14,
+                      color: Colors.grey[500],
                     ),
 
                     const SizedBox(width: 6),
@@ -204,9 +216,9 @@ class _MyTeamPageState extends State<MyTeamPage> {
 
                         overflow: TextOverflow.ellipsis,
 
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.black87,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[700],
                         ),
                       ),
                     ),
@@ -235,6 +247,7 @@ class _MyTeamPageState extends State<MyTeamPage> {
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
+                fontSize: 12,
               ),
             ),
           ),
@@ -246,35 +259,62 @@ class _MyTeamPageState extends State<MyTeamPage> {
   Widget buildSectionTitle(String title, IconData icon) {
     return Row(
       children: [
-        Icon(
-          icon,
-          color: const Color(0xFF1B5E20),
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: _kPrimaryGreen.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            color: _kDarkGreen,
+            size: 18,
+          ),
         ),
 
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
 
         Text(
           title,
           style: const TextStyle(
-            fontSize: 19,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1B5E20),
+            color: _kInk,
           ),
         ),
       ],
     );
   }
 
+  Widget buildEmptyState(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kBorder),
+      ),
+      child: Center(
+        child: Text(
+          message,
+          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FA),
+      backgroundColor: _kBg,
 
       body: isLoading
           ? const Center(
-              child: CircularProgressIndicator(),
+              child: CircularProgressIndicator(color: _kPrimaryGreen),
             )
           : RefreshIndicator(
+              color: _kPrimaryGreen,
               onRefresh: fetchTeam,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -288,38 +328,48 @@ class _MyTeamPageState extends State<MyTeamPage> {
 
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(18),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [
                             Color(0xFF1B5E20),
-                            Color(0xFF43A047),
+                            Color(0xFF388E3C),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(22),
+                        borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.green.withValues(alpha: 0.25),
-                            blurRadius: 12,
-                            offset: const Offset(0, 5),
+                            color: _kPrimaryGreen.withValues(alpha: 0.22),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
                           ),
                         ],
                       ),
                       child: Column(
                         children: [
-                          CircleAvatar(
-                            radius: 34,
-                            backgroundColor: Colors.white,
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withOpacity(.4),
+                                width: 2,
+                              ),
+                            ),
+                            child: CircleAvatar(
+                              radius: 32,
+                              backgroundColor: Colors.white,
                               child: Text(
                            (currentUser?["name"] ?? "").toString().isNotEmpty
     ? currentUser!["name"].toString()[0].toUpperCase()
     : "U",
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1B5E20),
+                                style: const TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1B5E20),
+                                ),
                               ),
                             ),
                           ),
@@ -330,18 +380,18 @@ class _MyTeamPageState extends State<MyTeamPage> {
                             currentUser?["name"] ?? "",
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 21,
+                              fontSize: 19,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
 
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
 
                           Text(
                             currentUser?["job_role"] ?? "",
                             style: const TextStyle(
                               color: Colors.white70,
-                              fontSize: 15,
+                              fontSize: 14,
                             ),
                           ),
 
@@ -350,24 +400,36 @@ class _MyTeamPageState extends State<MyTeamPage> {
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
-                              vertical: 8,
+                              vertical: 7,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(.18),
+                              color: Colors.white.withOpacity(.16),
                               borderRadius: BorderRadius.circular(30),
                             ),
-                            child: Text(
-                              currentUser?["contact_no"] ?? "",
-                              style: const TextStyle(
-                                color: Colors.white,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.call,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  currentUser?["contact_no"] ?? "",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 26),
 
                     // ==============================
                     // MANAGERS
@@ -381,18 +443,7 @@ class _MyTeamPageState extends State<MyTeamPage> {
                     const SizedBox(height: 14),
 
                     managers.isEmpty
-                        ? Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                "No Reporting Managers",
-                              ),
-                            ),
-                          )
+                        ? buildEmptyState("No Reporting Managers")
                         : Column(
                             children: managers
                                 .map(
@@ -404,7 +455,7 @@ class _MyTeamPageState extends State<MyTeamPage> {
                                 .toList(),
                           ),
 
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 26),
 
                     // ==============================
                     // TEAM MEMBERS
@@ -424,7 +475,7 @@ class _MyTeamPageState extends State<MyTeamPage> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1B5E20),
+                            color: _kDarkGreen,
                             borderRadius: BorderRadius.circular(30),
                           ),
                           child: Text(
@@ -432,6 +483,7 @@ class _MyTeamPageState extends State<MyTeamPage> {
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
+                              fontSize: 12,
                             ),
                           ),
                         ),
@@ -441,18 +493,7 @@ class _MyTeamPageState extends State<MyTeamPage> {
                     const SizedBox(height: 14),
 
                     team.isEmpty
-                        ? Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                "No Team Members",
-                              ),
-                            ),
-                          )
+                        ? buildEmptyState("No Team Members")
                         : Column(
                             children: team
                                 .map(

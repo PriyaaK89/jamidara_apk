@@ -211,6 +211,16 @@ if (widget.isOrderSubPageOpen) {
           return false;
         }
 
+ if (widget.currentRoute == "track_team_employees") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
+            ),
+          );
+          return false;
+        }
         if (widget.currentRoute == "attendance_report") {
           Navigator.pushReplacement(
             context,

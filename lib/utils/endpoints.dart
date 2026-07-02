@@ -32,6 +32,6 @@ class Endpoints {
   static const String getUsersbySelectedLevel = "/users-by-level";
   static const String viewVisitByHirarchy = "/hierarchy-visits";
   static const String getVisitDetailsByID = "/get-hierarchy-visits";
-
+  static const String getRouteByEmpId = "/get-route";
 
 }

@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../pages/my_team_page.dart';
 import "../pages/EmpProfile/team_visit_report_page.dart";
+import "../pages/EmpProfile/track_team_employees.dart";
 
 class ProfileMenuPage extends StatefulWidget {
   final bool clearSavedCredentialsOnLogout;
@@ -406,6 +407,29 @@ class _ProfileMenuPageState extends State<ProfileMenuPage> {
                     ),
                     _buildTile(
                       context: context,
+                      icon: Icons.group_work,
+                      title: 'My Team Attendance',
+                      subtitle: 'Check attendance status of team',
+                      onTap: () async {
+                        Navigator.pop(context);
+
+                        final token = await StorageService.getToken();
+                        final employeeId = await StorageService.getEmployeeId();
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AppRouter(
+                              employeeId: employeeId!,
+                              token: token!,
+                              initialRoute: "team_attendance_report",
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildTile(
+                      context: context,
                       icon: Icons.location_on_outlined,
                       title: 'My Visits',
                       subtitle: 'Check market visit activities',
@@ -429,7 +453,7 @@ class _ProfileMenuPageState extends State<ProfileMenuPage> {
                     ),
                     _buildTile(
                       context: context,
-                      icon: Icons.flag_outlined,
+                      icon: Icons.group,
                       title: 'My Team Visit',
                       subtitle: 'View Visits of Assigned Team Members',
                       onTap: () async {
@@ -439,6 +463,24 @@ class _ProfileMenuPageState extends State<ProfileMenuPage> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => TeamVisitReportPage(myLevel: level),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildTile(
+                      context: context,
+                      icon: Icons.location_pin,
+                      title: 'Track Team Members',
+                      subtitle: 'View route of your team',
+                      onTap: () async {
+                        Navigator.pop(context);
+
+                        final level = await StorageService.getJobRoleLevel();
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TrackTeamPage(myLevel: level),
                           ),
                         );
                       },

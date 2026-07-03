@@ -12,17 +12,29 @@ import '../pages/EmpProfile/salary_report_page.dart';
 import '../pages/EmpProfile/distributor_onbording_page.dart';
 import '../pages/profile_page.dart';
 import '../pages/my_team_page.dart';
+import "../pages/EmpProfile/team_attendance_report.dart";
+import "../pages/EmpProfile/team_visit_report_page.dart";
+import "../services/storage_service.dart";
+import '../pages/EmpProfile/team_menu_page.dart';
 
 class AppRouter extends StatefulWidget {
   final int employeeId;
   final String token;
   final String initialRoute;
 
+  /// True ONLY for the very first AppRouter created right after login.
+  /// Every AppRouter reached via Navigator.push(...) from inside the app
+  /// (Team menu, My Team, Profile tiles, etc.) must pass isRoot: false
+  /// (the default) so its back button just pops the route instead of
+  /// switching tabs or closing the app.
+  final bool isRoot;
+
   const AppRouter({
     super.key,
     required this.employeeId,
     required this.token,
     this.initialRoute = "dashboard",
+    this.isRoot = false,
   });
 
   @override
@@ -34,36 +46,50 @@ class _AppRouterState extends State<AppRouter> {
   String currentRoute = "dashboard";
   Widget? customOrderPage;
 
+  int _myLevel = 1;
+
   @override
   void initState() {
     super.initState();
     currentRoute = widget.initialRoute;
+    currentIndex = _indexForRoute(currentRoute);
+    _loadLevel();
+  }
 
-    //  Sync tab index
-    switch (currentRoute) {
+  // Central place mapping every route to a bottom-nav index.
+  // Anything not on the 5 main tabs falls under the "More" tab (index 4)
+  // so the correct bottom-nav icon stays highlighted.
+  int _indexForRoute(String route) {
+    switch (route) {
       case "dashboard":
-        currentIndex = 0;
-        break;
+        return 0;
       case "attendance":
-        currentIndex = 1;
-        break;
+        return 1;
       case "visit":
-        currentIndex = 2;
-        break;
+        return 2;
       case "order":
-        currentIndex = 3;
-        break;
-       case "my_team":
-  currentIndex = 4;
-  break;
+        return 3;
+      case "my_team":
       case "quick_actions":
-        currentIndex = 4;
-        break;
-         case "profile_page":
-      currentIndex = 4; 
-           break;
+      case "profile_page":
+      case "team_menu":
+      case "team_attendance_report":
+      case "team_visit_report":
+      case "visit_report":
+      case "salary_report":
+      case "distributor_onboarding":
+      case "attendance_report":
+      case "expense":
+        return 4;
       default:
-        currentIndex = 0;
+        return 0;
+    }
+  }
+
+  Future<void> _loadLevel() async {
+    final level = await StorageService.getJobRoleLevel();
+    if (mounted) {
+      setState(() => _myLevel = level);
     }
   }
 
@@ -82,10 +108,8 @@ class _AppRouterState extends State<AppRouter> {
           token: widget.token,
         );
 
-        case "profile_page":
-        return const ProfilePage(
-
-        );
+      case "profile_page":
+        return const ProfilePage();
 
       case "visit":
         return const VisitPage();
@@ -96,18 +120,27 @@ class _AppRouterState extends State<AppRouter> {
       case "salary_report":
         return const SalaryReportPage();
 
+      case "team_attendance_report":
+        return TeamAttendancePage(myLevel: _myLevel);
+
+      case "team_visit_report":
+        return TeamVisitReportPage(myLevel: _myLevel);
+
       case "order":
-  return customOrderPage ??
-      OrderPage(
-        onOpenPage: (page) {
-          setState(() {
-            customOrderPage = page;
-          });
-        },
-      );
-      
+        return customOrderPage ??
+            OrderPage(
+              onOpenPage: (page) {
+                setState(() {
+                  customOrderPage = page;
+                });
+              },
+            );
+
       case "my_team":
-  return const MyTeamPage();
+        return const MyTeamPage();
+
+      case "team_menu":
+        return const TeamMenuPage();
 
       case "distributor_onboarding":
         return const DistributorOnboardingPage();
@@ -140,10 +173,11 @@ class _AppRouterState extends State<AppRouter> {
           onBackToQuickActions: () {
             setState(() {
               currentRoute = "quick_actions";
-              currentIndex = 4; //  VERY IMPORTANT
+              currentIndex = 4;
             });
           },
         );
+
       case "attendance_report":
         return const AttendanceReportPage();
 
@@ -152,81 +186,60 @@ class _AppRouterState extends State<AppRouter> {
     }
   }
 
-void onTabChange(int index) {
+  void onTabChange(int index) {
+    setState(() {
+      currentIndex = index;
+      customOrderPage = null;
 
-  setState(() {
-
-    currentIndex = index;
-    customOrderPage = null;
-
-    switch (index) {
-
-      case 0:
-        currentRoute = "dashboard";
-        break;
-
-      case 1:
-        currentRoute = "attendance";
-        break;
-
-      case 2:
-        currentRoute = "visit";
-        break;
-
-      case 3:
-        currentRoute = "order";
-        break;
-
-      case 4:
-        currentRoute = "quick_actions";
-        break;
-
-      default:
-        currentRoute = "dashboard";
-    }
-  });
-}
+      switch (index) {
+        case 0:
+          currentRoute = "dashboard";
+          break;
+        case 1:
+          currentRoute = "attendance";
+          break;
+        case 2:
+          currentRoute = "visit";
+          break;
+        case 3:
+          currentRoute = "order";
+          break;
+        case 4:
+          currentRoute = "quick_actions";
+          break;
+        default:
+          currentRoute = "dashboard";
+      }
+    });
+  }
 
   void navigate(String route) {
     setState(() {
       currentRoute = route;
+      currentIndex = _indexForRoute(route);
     });
-  }
-
-  String getRouteFromIndex(int index) {
-    switch (index) {
-      case 0:
-        return "dashboard";
-      case 1:
-        return "attendance";
-      case 2:
-        return "visit";
-      case 3:
-        return "order";
-      case 4:
-        return "quick_actions";
-      case 5:
-        return "profile_page";
-      default:
-        return "dashboard";
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return MainLayout(
+      isRoot: widget.isRoot,
       currentIndex: currentIndex,
       currentRoute: currentRoute,
       onTabChange: onTabChange,
       child: getCurrentPage(),
-
-       isOrderSubPageOpen: customOrderPage != null,
-
-  onCloseOrderSubPage: () {
-    setState(() {
-      customOrderPage = null;
-    });
-  },
+      isOrderSubPageOpen: customOrderPage != null,
+      onCloseOrderSubPage: () {
+        setState(() {
+          customOrderPage = null;
+        });
+      },
+      onExpenseBack: () {
+        setState(() {
+          currentRoute = "quick_actions";
+          currentIndex = 4;
+        });
+      },
     );
   }
 }

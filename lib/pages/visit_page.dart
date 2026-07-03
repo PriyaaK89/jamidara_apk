@@ -15,6 +15,56 @@ import 'package:geocoding/geocoding.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show compute;
+
+Uint8List _processImageIsolate(Map<String, dynamic> params) {
+  final Uint8List imageBytes = params['imageBytes'];
+  final Uint8List? logoBytes = params['logoBytes'];
+  final List<String> lines = List<String>.from(params['lines']);
+
+  img.Image? image = img.decodeImage(imageBytes);
+  if (image == null) throw Exception("Failed to decode image");
+
+  int padding = 20;
+  int boxHeight = (lines.length * 50) + 40;
+  int startY = image.height - boxHeight - 20;
+
+  img.fillRect(
+    image,
+    x1: 0,
+    y1: startY,
+    x2: image.width,
+    y2: image.height,
+    color: img.ColorRgba8(0, 0, 0, 180),
+  );
+
+  final font = img.arial24;
+  for (int i = 0; i < lines.length; i++) {
+    img.drawString(
+      image,
+      lines[i],
+      font: font,
+      x: padding,
+      y: startY + 10 + (i * 40),
+      color: img.ColorRgb8(255, 255, 255),
+    );
+  }
+
+  if (logoBytes != null) {
+    final logo = img.decodeImage(logoBytes);
+    if (logo != null) {
+      final resizedLogo = img.copyResize(logo, width: image.width ~/ 4);
+      img.compositeImage(
+        image,
+        resizedLogo,
+        dstX: image.width - resizedLogo.width - 10,
+        dstY: 10,
+      );
+    }
+  }
+
+  return img.encodeJpg(image, quality: 65);
+}
 
 class VisitPage extends StatefulWidget {
   const VisitPage({super.key});
@@ -28,6 +78,7 @@ class _VisitPageState extends State<VisitPage> {
   int customerDropdownKey = 0;
   String? attendanceType; // Retailer / Distributor / Farmer
   String? customerType; // Old Customer / New Customer
+  Uint8List? _logoBytes;
 
   String? visitPurpose;
 
@@ -136,6 +187,17 @@ class _VisitPageState extends State<VisitPage> {
     });
   }
 
+   @override
+  void initState() {
+    super.initState();
+    _loadLogo();
+  }
+
+  Future<void> _loadLogo() async {
+    final data = await rootBundle.load('assets/images/logo.png');
+    _logoBytes = data.buffer.asUint8List();
+  }
+
   Future<Position> _getLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
@@ -206,86 +268,50 @@ class _VisitPageState extends State<VisitPage> {
   }
 
   Future<File?> _stampImage(File file) async {
-    try {
-      //  Get location
-      final position = await _getLocation();
+  try {
+    final sw = Stopwatch()..start();
 
-      //  Get address
-      final address = await _getAddress(position.latitude, position.longitude);
+    // Run location fetch and file read in parallel
+    final results = await Future.wait([
+      _getLocation(),
+      file.readAsBytes(),
+    ]);
+    final position = results[0] as Position;
+    final Uint8List bytes = results[1] as Uint8List;
+    print("Location + Read Image: ${sw.elapsedMilliseconds} ms");
 
-      //  Date & Time
-      String date = DateFormat('dd-MM-yyyy').format(DateTime.now());
-      String time = DateFormat('hh:mm a').format(DateTime.now());
+    final address = await _getAddress(position.latitude, position.longitude);
+    print("Address: ${sw.elapsedMilliseconds} ms");
 
-      //  Text lines
-      List<String> lines = [
-        "Date: $date  Time: $time",
-        address,
-        "Lat: ${position.latitude}, Lng: ${position.longitude}",
-      ];
+    String date = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    String time = DateFormat('hh:mm a').format(DateTime.now());
 
-      //  Load image
-      final bytes = await file.readAsBytes();
-      img.Image? image = img.decodeImage(bytes);
-      if (image == null) return null;
+    List<String> lines = [
+      "Date: $date  Time: $time",
+      address,
+      "Lat: ${position.latitude}, Lng: ${position.longitude}",
+    ];
 
-      final logoBytes = await rootBundle.load('assets/images/logo.png');
-      final logo = img.decodeImage(logoBytes.buffer.asUint8List());
+    final processedBytes = await compute(_processImageIsolate, {
+      'imageBytes': bytes,
+      'logoBytes': _logoBytes,
+      'lines': lines,
+    });
+    print("Isolate processing: ${sw.elapsedMilliseconds} ms");
 
-      //  Draw background box
-      int padding = 20;
-      int boxHeight = (lines.length * 50) + 40;
-      int startY = image.height - boxHeight - 20;
+    final dir = await getApplicationDocumentsDirectory();
+    final newPath =
+        '${dir.path}/visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-      img.fillRect(
-        image,
-        x1: 0,
-        y1: startY,
-        x2: image.width,
-        y2: image.height,
-        color: img.ColorRgba8(0, 0, 0, 180),
-      );
+    final newFile = File(newPath)..writeAsBytesSync(processedBytes);
+    print("Write file: ${sw.elapsedMilliseconds} ms");
 
-      //  Draw text
-      final font = img.arial24;
-
-      for (int i = 0; i < lines.length; i++) {
-        img.drawString(
-          image,
-          lines[i],
-          font: font,
-          x: padding,
-          y: startY + 10 + (i * 40),
-          color: img.ColorRgb8(255, 255, 255),
-        );
-      }
-
-      //  Add logo (top-right)
-      if (logo != null) {
-        final resizedLogo = img.copyResize(logo, width: image.width ~/ 4);
-
-        img.compositeImage(
-          image,
-          resizedLogo,
-          dstX: image.width - resizedLogo.width - 10,
-          dstY: 10,
-        );
-      }
-
-      //  Save image
-      final dir = await getApplicationDocumentsDirectory();
-      final newPath =
-          '${dir.path}/visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      final newFile = File(newPath)
-        ..writeAsBytesSync(img.encodeJpg(image, quality: 90));
-
-      return newFile;
-    } catch (e) {
-      print("Stamp error: $e");
-      return null;
-    }
+    return newFile;
+  } catch (e) {
+    print("Stamp error: $e");
+    return null;
   }
+}
 
   Future<void> _selectReminderDate() async {
     final DateTime? pickedDate = await showDatePicker(
@@ -367,7 +393,9 @@ class _VisitPageState extends State<VisitPage> {
       final XFile? pickedFile = await _picker.pickImage(
         source: ImageSource.camera,
         preferredCameraDevice: cameraDevice,
-        imageQuality: 75,
+        imageQuality: 50,
+        maxWidth: 1280,
+        maxHeight: 1280,
       );
 
       if (pickedFile != null) {
@@ -379,11 +407,8 @@ class _VisitPageState extends State<VisitPage> {
 
         //  IMPORTANT: give UI time to rebuild
         await Future.delayed(const Duration(milliseconds: 50));
-
         File? stamped = await _stampImage(original);
-
         if (!mounted) return;
-
         setState(() {
           _selectedImage = stamped ?? original;
           isImageLoading = false; //  STOP LOADING

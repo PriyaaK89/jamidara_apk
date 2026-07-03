@@ -10,7 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'routes/app_routes.dart';
 import 'services/api_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:screen_protector/screen_protector.dart';
+// import 'package:screen_protector/screen_protector.dart';
 import 'services/notification_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -55,7 +55,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await dotenv.load(fileName: ".env");
-  await ScreenProtector.preventScreenshotOn();
+  // await ScreenProtector.preventScreenshotOn();
 
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('FLUTTER_BASE_URL', dotenv.env['FLUTTER_BASE_URL']!);

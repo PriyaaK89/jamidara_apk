@@ -16,6 +16,15 @@ class MainLayout extends StatefulWidget {
   final bool isOrderSubPageOpen;
   final VoidCallback? onCloseOrderSubPage;
 
+  /// Called when back is pressed while on the "expense" route, so the
+  /// AppRouter can drop back to "quick_actions" without popping the page.
+  final VoidCallback? onExpenseBack;
+
+  /// True only for the very first AppRouter (right after login).
+  /// Controls what happens when the user is on tab 0 ("dashboard")
+  /// and presses back: root closes the app, non-root just pops the route.
+  final bool isRoot;
+
   const MainLayout({
     super.key,
     required this.child,
@@ -24,6 +33,8 @@ class MainLayout extends StatefulWidget {
     required this.currentRoute,
     required this.isOrderSubPageOpen,
     this.onCloseOrderSubPage,
+    this.onExpenseBack,
+    this.isRoot = false,
   });
 
   @override
@@ -31,8 +42,6 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  // late VoidCallback _logoutListener;
-
   @override
   void initState() {
     super.initState();
@@ -43,7 +52,6 @@ class _MainLayoutState extends State<MainLayout> {
     _loadUserProfile();
   }
 
-  @override
   @override
   void dispose() {
     super.dispose();
@@ -108,7 +116,6 @@ class _MainLayoutState extends State<MainLayout> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Company Name
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
@@ -127,7 +134,6 @@ class _MainLayoutState extends State<MainLayout> {
               ),
             ],
           ),
-
           InkWell(
             onTap: _openProfileMenu,
             borderRadius: BorderRadius.circular(30),
@@ -144,25 +150,16 @@ class _MainLayoutState extends State<MainLayout> {
                   final imageUrl = user?['profile_image_url'];
                   final name = user?['name'] ?? '';
 
-                  return InkWell(
-                    onTap: _openProfileMenu,
-                    borderRadius: BorderRadius.circular(30),
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: const BoxDecoration(shape: BoxShape.circle),
-                      child: ClipOval(
-                        child: (imageUrl != null && imageUrl.isNotEmpty)
-                            ? Image.network(
-                                imageUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return _buildInitialAvatar(name);
-                                },
-                              )
-                            : _buildInitialAvatar(name),
-                      ),
-                    ),
+                  return ClipOval(
+                    child: (imageUrl != null && imageUrl.isNotEmpty)
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return _buildInitialAvatar(name);
+                            },
+                          )
+                        : _buildInitialAvatar(name),
                   );
                 },
               ),
@@ -173,95 +170,47 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
+  /// Handles the hardware/gesture back button.
+  /// Returns true to let the pop actually happen, false to swallow it.
+  Future<bool> _handleWillPop() async {
+    // 1. Close an open order sub-page first, regardless of root or not.
+    if (widget.isOrderSubPageOpen) {
+      widget.onCloseOrderSubPage?.call();
+      return false;
+    }
+
+    // 2. "expense" is an internal state within THIS SAME AppRouter instance
+    //    (not a separate pushed route), so back should just drop to
+    //    quick_actions instead of popping the whole page.
+    if (widget.currentRoute == "expense") {
+      widget.onExpenseBack?.call();
+      return false;
+    }
+
+    // 3. If the user switched tabs within this instance (currentIndex != 0),
+    //    first back press returns to the Dashboard tab of THIS instance.
+    if (widget.currentIndex != 0) {
+      widget.onTabChange(0);
+      return false;
+    }
+
+    // 4. We're on tab 0 (Dashboard) of this instance with nothing else open.
+    //    - Non-root AppRouter (pushed via Navigator.push from some menu):
+    //      just let the pop happen -> reveals whatever page pushed this one.
+    //    - Root AppRouter (the very first one after login): back here means
+    //      exit the app.
+    if (widget.isRoot) {
+      SystemNavigator.pop();
+      return false;
+    }
+
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async {
-
-if (widget.isOrderSubPageOpen) {
-  widget.onCloseOrderSubPage?.call();
-  return false;
-}
-
-        //  Expense Page → Quick Actions
-        if (widget.currentRoute == "expense") {
-          widget.onTabChange(4);
-          return false;
-        }
-        if (widget.currentRoute == "my_team") {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
-            ),
-          );
-
-          return false;
-        }
-
-        if (widget.currentRoute == "visit_report") {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
-            ),
-          );
-          return false;
-        }
-
- if (widget.currentRoute == "track_team_employees") {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
-            ),
-          );
-          return false;
-        }
-        if (widget.currentRoute == "attendance_report") {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
-            ),
-          );
-          return false;
-        }
-
-        if (widget.currentRoute == "salary_report") {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  ProfileMenuPage(clearSavedCredentialsOnLogout: false),
-            ),
-          );
-          return false;
-        }
-
-        if (widget.currentRoute == "team_visit_report") {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (_) =>
-          ProfileMenuPage(clearSavedCredentialsOnLogout: false),
-    ),
-  );
-  return false;
-}
-
-        if (widget.currentIndex != 0) {
-          widget.onTabChange(0);
-          return false;
-        } else {
-          SystemNavigator.pop();
-          return false;
-        }
-      },
+      onWillPop: _handleWillPop,
       child: Scaffold(
         backgroundColor: const Color.fromARGB(255, 241, 245, 243),
         body: Column(
@@ -270,7 +219,6 @@ if (widget.isOrderSubPageOpen) {
             Expanded(child: widget.child),
           ],
         ),
-
         bottomNavigationBar: BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
           currentIndex: widget.currentIndex,

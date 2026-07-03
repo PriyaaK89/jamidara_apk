@@ -343,42 +343,25 @@ void dispose() {
   }
 
   // ── filter panel ──
-Widget _buildFilterPanel() {
-  return Container(
-    color: const Color(0xFFF5F7FA), // matches page background, not the header
-    padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-    child: Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+  Widget _buildFilterPanel() {
+    return Container(
+      color: const Color(0xFF1B5E20),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Small section title, not a shouting header
-          Row(
-            children: [
-              const Icon(Icons.route_rounded, color: Color(0xFF1B5E20), size: 18),
-              const SizedBox(width: 6),
-              const Text(
-                'Track Team',
-                style: TextStyle(
-                  color: Color(0xFF1B5E20),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
+          // Title
+          const Padding(
+            padding: EdgeInsets.only(top: 10, bottom: 10),
+            child: Text(
+              'Track Team Members',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 12),
 
           // Date row
           _buildDateRow(),
@@ -396,182 +379,157 @@ Widget _buildFilterPanel() {
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
-Widget _buildDateRow() {
-  return GestureDetector(
-    onTap: _pickDate,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F6F1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFCFE3D0)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.calendar_today_rounded,
-              color: Color(0xFF1B5E20), size: 17),
-          const SizedBox(width: 10),
-          Text(
-            DateFormat('dd MMM yyyy').format(_selectedDate),
-            style: const TextStyle(
-              color: Color(0xFF1B5E20),
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-          const Spacer(),
-          const Icon(Icons.arrow_drop_down, color: Color(0xFF1B5E20)),
-        ],
-      ),
-    ),
-  );
-}
-
-Widget _buildLevelDropdown() {
-  return _styledDropdown<Map<String, dynamic>?>(
-    hint: 'Select Level',
-    value: _selectedLevelOption,
-    items: [
-      const DropdownMenuItem(value: null, child: Text('Select Level')),
-      ..._subordinateOptions.map(
-        (opt) => DropdownMenuItem(
-          value: opt,
-          child: Text(opt['label'] as String),
+  Widget _buildDateRow() {
+    return GestureDetector(
+      onTap: _pickDate,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white38),
         ),
-      ),
-    ],
-    onChanged: _onLevelChanged,
-  );
-}
-
-Widget _buildUserDropdown() {
-  if (_loadingUsers) {
-    return Container(
-      height: 46,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F6F1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFCFE3D0)),
-      ),
-      child: const Center(
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-              strokeWidth: 2, color: Color(0xFF1B5E20)),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_today_rounded,
+                color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Text(
+              DateFormat('dd MMM yyyy').format(_selectedDate),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            const Icon(Icons.arrow_drop_down, color: Colors.white70),
+          ],
         ),
       ),
     );
   }
 
-  return _styledDropdown<LevelUserTrack?>(
-    hint: 'Select Member',
-    value: _selectedUser,
-    items: [
-      const DropdownMenuItem(value: null, child: Text('Select Member')),
-      ..._levelUsers.map(
-        (u) => DropdownMenuItem(value: u, child: Text(u.name)),
-      ),
-    ],
-    onChanged: _onUserChanged,
-  );
-}
-
-Widget _styledDropdown<T>({
-  required String hint,
-  required T value,
-  required List<DropdownMenuItem<T>> items,
-  required void Function(T?) onChanged,
-}) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF1F6F1),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFFCFE3D0)),
-    ),
-    child: DropdownButtonHideUnderline(
-      child: DropdownButton<T>(
-        value: value,
-        hint: Text(hint,
-            style: const TextStyle(color: Colors.black45, fontSize: 13)),
-        dropdownColor: Colors.white,
-        style: const TextStyle(color: Color(0xFF1B5E20), fontSize: 13, fontWeight: FontWeight.w600),
-        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1B5E20)),
-        isExpanded: true,
-        items: items,
-        onChanged: onChanged,
-      ),
-    ),
-  );
-}
-
-// ── stats bar ──
-Widget _buildStatsBar() {
-  final dist = _totalDistance(_routePoints);
-  final time = _travelTime(_routePoints);
-  final start = DateFormat('hh:mm a').format(_routePoints.first.recordedAt);
-  final end = DateFormat('hh:mm a').format(_routePoints.last.recordedAt);
-
-  return Container(
-    color: const Color(0xFFF5F7FA),
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-    child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+  Widget _buildLevelDropdown() {
+    return _styledDropdown<Map<String, dynamic>?>(
+      hint: 'Select Level',
+      value: _selectedLevelOption,
+      items: [
+        const DropdownMenuItem(value: null, child: Text('Select Level')),
+        ..._subordinateOptions.map(
+          (opt) => DropdownMenuItem(
+            value: opt,
+            child: Text(opt['label'] as String),
           ),
-        ],
+        ),
+      ],
+      onChanged: _onLevelChanged,
+    );
+  }
+
+  Widget _buildUserDropdown() {
+    if (_loadingUsers) {
+      return Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: Colors.white),
+          ),
+        ),
+      );
+    }
+
+    return _styledDropdown<LevelUserTrack?>(
+      hint: 'Select Member',
+      value: _selectedUser,
+      items: [
+        const DropdownMenuItem(value: null, child: Text('Select Member')),
+        ..._levelUsers.map(
+          (u) => DropdownMenuItem(value: u, child: Text(u.name)),
+        ),
+      ],
+      onChanged: _onUserChanged,
+    );
+  }
+
+  Widget _styledDropdown<T>({
+    required String hint,
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required void Function(T?) onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white38),
       ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          hint: Text(hint,
+              style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          dropdownColor: const Color(0xFF2E7D32),
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+          isExpanded: true,
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  // ── stats bar ──
+  Widget _buildStatsBar() {
+    final dist = _totalDistance(_routePoints);
+    final time = _travelTime(_routePoints);
+    final start = DateFormat('hh:mm a').format(_routePoints.first.recordedAt);
+    final end = DateFormat('hh:mm a').format(_routePoints.last.recordedAt);
+
+    return Container(
+      color: const Color(0xFF2E7D32),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _statChip(Icons.straighten, '${dist.toStringAsFixed(2)} km', 'Distance'),
-          _vDivider(),
           _statChip(Icons.access_time, time, 'Travel Time'),
-          _vDivider(),
           _statChip(Icons.play_arrow_rounded, start, 'Start'),
-          _vDivider(),
           _statChip(Icons.stop_rounded, end, 'End'),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
-Widget _vDivider() => Container(width: 1, height: 28, color: const Color(0xFFE0E0E0));
-
-Widget _statChip(IconData icon, String value, String label) {
-  return Column(
-    children: [
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: const Color(0xFF1B5E20), size: 14),
-          const SizedBox(width: 4),
-          Text(value,
-              style: const TextStyle(
-                  color: Color(0xFF1B5E20),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13)),
-        ],
-      ),
-      const SizedBox(height: 2),
-      Text(label,
-          style: const TextStyle(color: Colors.black45, fontSize: 10)),
-    ],
-  );
-}
+  Widget _statChip(IconData icon, String value, String label) {
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white70, size: 14),
+            const SizedBox(width: 4),
+            Text(value,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13)),
+          ],
+        ),
+        Text(label,
+            style: const TextStyle(color: Colors.white60, fontSize: 10)),
+      ],
+    );
+  }
 
   // ── body ──
   Widget _buildBody() {

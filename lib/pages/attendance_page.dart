@@ -985,12 +985,7 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
 ],
 
             const SizedBox(height: 12),
-            // Center(
-            //   child: ElevatedButton(
-            //     onPressed: () => pickImage('selfie'),
-            //     child: const Text('Take Selfie'),
-            //   ),
-            // ),
+
 
             if (attendanceType != 'leave') ...[
   const SizedBox(height: 12),
@@ -1005,8 +1000,8 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
   if (selfieImage != null && selfieImage!.existsSync())
     Image.file(selfieImage!, height: 150),
 ],
-            if (selfieImage != null && selfieImage!.existsSync())
-              Image.file(selfieImage!, height: 150),
+            // if (selfieImage != null && selfieImage!.existsSync())
+            //   Image.file(selfieImage!, height: 150),
 
             const SizedBox(height: 20),
             Center(

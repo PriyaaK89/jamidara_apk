@@ -166,14 +166,26 @@ class _VisitDetailsModalState extends State<_VisitDetailsModal> {
 }
 
   // ── helpers ──
+  // String _formatDate(String raw) {
+  //   try {
+  //     final dt = DateTime.parse(raw).toLocal();
+  //     return DateFormat('dd MMM yyyy, hh:mm a').format(dt);
+  //   } catch (_) {
+  //     return raw;
+  //   }
+  // }
   String _formatDate(String raw) {
-    try {
-      final dt = DateTime.parse(raw).toLocal();
-      return DateFormat('dd MMM yyyy, hh:mm a').format(dt);
-    } catch (_) {
-      return raw;
+  try {
+    // Force UTC interpretation, regardless of whether the string has 'Z' or not
+    DateTime dt = DateTime.parse(raw);
+    if (!raw.endsWith('Z') && !raw.contains('+')) {
+      dt = DateTime.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
     }
+    return DateFormat('dd MMM yyyy, hh:mm a').format(dt.toLocal());
+  } catch (_) {
+    return raw;
   }
+}
 
   String _formatReminderDate(String? raw) {
     if (raw == null || raw.isEmpty) return '—';

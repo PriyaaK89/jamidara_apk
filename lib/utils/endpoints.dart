@@ -34,4 +34,7 @@ class Endpoints {
   static const String getVisitDetailsByID = "/get-hierarchy-visits";
   static const String getRouteByEmpId = "/get-route";
 
+  static const String getEmployeeVisitProgress = "/visit-targets/progress/employee"; // append /:employeeId
+static const String getVisitTargetHistory = "/visit-targets/progress/history";
+
 }

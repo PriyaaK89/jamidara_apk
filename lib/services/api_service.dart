@@ -1284,4 +1284,85 @@ class ApiService {
     return [];
   }
 }
+
+/// Current active target + progress breakdown for one employee
+static Future<Map<String, dynamic>> getEmployeeVisitProgress(
+  String token,
+  int employeeId,
+) async {
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+  final url = Uri.parse(
+    '$baseUrl${Endpoints.getEmployeeVisitProgress}/$employeeId',
+  );
+
+  try {
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final responseData = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return responseData;
+    } else {
+      return {
+        "success": false,
+        "message": responseData['message'] ?? 'Failed to fetch progress',
+      };
+    }
+  } catch (e) {
+    return {"success": false, "message": "Exception occurred: $e"};
+  }
+}
+
+/// Past (COMPLETED/EXPIRED) periods for one employee
+static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
+  String token,
+  int employeeId, {
+  String? status,
+  int page = 1,
+  int limit = 10,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+  final queryParams = {
+    'employee_id': employeeId.toString(),
+    'page': page.toString(),
+    'limit': limit.toString(),
+    if (status != null) 'status': status,
+  };
+
+  final url = Uri.parse(
+    '$baseUrl${Endpoints.getVisitTargetHistory}',
+  ).replace(queryParameters: queryParams);
+
+  try {
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final responseData = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return responseData;
+    } else {
+      return {
+        "success": false,
+        "message": responseData['message'] ?? 'Failed to fetch history',
+      };
+    }
+  } catch (e) {
+    return {"success": false, "message": "Exception occurred: $e"};
+  }
+}
 }

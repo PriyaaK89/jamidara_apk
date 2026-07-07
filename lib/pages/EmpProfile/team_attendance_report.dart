@@ -147,15 +147,39 @@ List<Map<String, dynamic>> _getSubordinateLevelOptions(int myLevel) {
 /// if the value is null, empty, or not parseable.
 String formatTime12Hour(String? time) {
   if (time == null || time.trim().isEmpty) return '—';
+
   try {
     final parts = time.split(':');
-    if (parts.length < 2) return time;
+
     final hour = int.parse(parts[0]);
     final minute = int.parse(parts[1]);
-    final dt = DateTime(2000, 1, 1, hour, minute);
-    return DateFormat('h:mm a').format(dt);
+    final second = parts.length > 2 ? int.parse(parts[2]) : 0;
+
+    // Treat incoming time as UTC
+    final utc = DateTime.utc(2000, 1, 1, hour, minute, second);
+
+    // Convert UTC → IST (+5:30)
+    final ist = utc.add(const Duration(hours: 5, minutes: 30));
+
+    return DateFormat('h:mm a').format(ist);
   } catch (_) {
     return time;
+  }
+}
+String formatDateTime(String? dateTime) {
+  if (dateTime == null || dateTime.isEmpty) return '—';
+
+  print("Received: '$dateTime'");
+
+  try {
+    final parsed = DateTime.parse(dateTime);
+    print("Parsed: $parsed");
+
+    final local = parsed.toLocal();
+    return DateFormat('h:mm a').format(local);
+  } catch (e) {
+    print("Parse Error: $e");
+    return dateTime;
   }
 }
 

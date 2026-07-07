@@ -367,7 +367,7 @@ class _ProfileMenuPageState extends State<ProfileMenuPage> {
 
                     _buildTile(
                       context: context,
-                      icon: Icons.fingerprint,
+                      icon: Icons.groups_rounded,
                       title: 'Team',
                       subtitle: 'Team, attendance, visits & tracking',
                       onTap: () async {

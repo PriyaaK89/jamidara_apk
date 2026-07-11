@@ -1,7 +1,7 @@
 // lib/utils/endpoints.dart
 class Endpoints {
   static const String login = '/auth/login';
-  static const String markAttendance= '/mark-emp-attendance';
+  static const String markAttendance = '/mark-emp-attendance';
   static const String saveLocation = '/save-location';
   static const String getDistrict = '/getstatecity';
   static const String getArea = '/areas';
@@ -13,7 +13,8 @@ class Endpoints {
   static const String getVisitReport = '/my-visits';
   static const String getAttendanceReport = '/my-attendance';
   static const String getProfile = '/auth/get-employee-details';
-  static const String getStreetAddress = 'https://maps.googleapis.com/maps/api/geocode/json';
+  static const String getStreetAddress =
+      'https://maps.googleapis.com/maps/api/geocode/json';
   static const String createOnBoardingOfDistributor = '/create-distributor';
   static const String verifyGST = '/verify-gst';
   static const String getTodayVisitCount = '/get-my-todayVisitCount';
@@ -25,7 +26,8 @@ class Endpoints {
   static const String createTarget = '/create-target';
   static const String myTargets = '/my-targets';
   static const String getMyTeam = '/my-team';
-  static const String createSalesApprovalRequest = "/create-sales-approval-request";
+  static const String createSalesApprovalRequest =
+      "/create-sales-approval-request";
   static const String getMyAssignedLedgers = "/get-my-assigned-ledgers";
   static const String getStockItemsList = "/get-stock-items/dropdown";
   static const String getStockItemDetailsById = "/getstockItemByID";
@@ -34,7 +36,11 @@ class Endpoints {
   static const String getVisitDetailsByID = "/get-hierarchy-visits";
   static const String getRouteByEmpId = "/get-route";
 
-  static const String getEmployeeVisitProgress = "/visit-targets/progress/employee"; // append /:employeeId
-static const String getVisitTargetHistory = "/visit-targets/progress/history";
+  static const String getNotification = "/get-notifications";
+  static const String getNotificationsCount = "/get-notification-counts";
+  static const String markNotificationsRead = "/mark-notifications-read";
 
+  static const String getEmployeeVisitProgress =
+      "/visit-targets/progress/employee"; // append /:employeeId
+  static const String getVisitTargetHistory = "/visit-targets/progress/history";
 }

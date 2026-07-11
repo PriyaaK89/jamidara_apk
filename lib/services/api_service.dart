@@ -1365,4 +1365,116 @@ static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
     return {"success": false, "message": "Exception occurred: $e"};
   }
 }
+
+// Get Notifications
+  static Future<Map<String, dynamic>> getNotifications(
+    String token, {
+    String? moduleType,
+    String? notificationCategory,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+    final queryParams = <String, String>{};
+    if (moduleType != null && moduleType.isNotEmpty) {
+      queryParams['module_type'] = moduleType;
+    }
+    if (notificationCategory != null && notificationCategory.isNotEmpty) {
+      queryParams['notification_category'] = notificationCategory;
+    }
+
+    final url = Uri.parse('$baseUrl${Endpoints.getNotification}')
+        .replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token', // adjust if your other calls use a different scheme
+        },
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return responseData;
+      } else {
+        return {
+          "success": false,
+          "message": responseData['message'] ?? 'Failed to fetch notifications',
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "Exception occurred: $e"};
+    }
+  }
+
+  // Get Notification Counts
+  static Future<Map<String, dynamic>> getNotificationCounts(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    final url = Uri.parse('$baseUrl${Endpoints.getNotificationsCount}');
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return responseData;
+      } else {
+        return {
+          "success": false,
+          "message": responseData['message'] ?? 'Failed to fetch notification counts',
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "Exception occurred: $e"};
+    }
+  }
+
+  // Mark Notifications Read
+  // Mark Notifications Read (pass ids for specific ones, omit to mark all)
+  static Future<Map<String, dynamic>> markNotificationsRead(
+    String token, {
+    List<int>? notificationIds,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    final url = Uri.parse('$baseUrl${Endpoints.markNotificationsRead}');
+
+    try {
+      final response = await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          if (notificationIds != null && notificationIds.isNotEmpty)
+            'notification_ids': notificationIds,
+        }),
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return responseData;
+      } else {
+        return {
+          "success": false,
+          "message": responseData['message'] ?? 'Failed to mark notification read',
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "Exception occurred: $e"};
+    }
+  }
 }

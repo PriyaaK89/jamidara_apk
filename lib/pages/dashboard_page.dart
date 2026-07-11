@@ -27,7 +27,7 @@ class _DashboardPageState extends State<DashboardPage> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkVisitReminder();
+      // _checkVisitReminder();
       _loadProfile();
       _loadTargetProgress();
     });

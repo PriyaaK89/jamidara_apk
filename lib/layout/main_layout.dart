@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/app_state.dart';
 import '../services/auth_service.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import '../services/notify_service.dart';
+import '../widgets/notification_modal.dart';
 
 class MainLayout extends StatefulWidget {
   final Widget child;
@@ -42,7 +44,8 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  @override
+
+    @override
   void initState() {
     super.initState();
     FlutterBackgroundService().on("forceLogout").listen((event) {
@@ -50,7 +53,40 @@ class _MainLayoutState extends State<MainLayout> {
       AuthService.logout(context);
     });
     _loadUserProfile();
+    _loadNotificationCount();
   }
+
+   Future<void> _loadNotificationCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token") ?? "";
+      if (token.isEmpty) return;
+
+      final res = await ApiService.getNotificationCounts(token);
+      debugPrint("Notification counts response: $res");
+
+      if (res["success"] == true) {
+        // final List rows = res["data"] ?? [];
+        final List rawRows = res["data"] ?? [];
+        final groups = rawRows.map((e) => NotificationCountGroup.fromJson(Map<String, dynamic>.from(e))).toList();
+       final total = groups.fold<int>(0, (sum, g) => sum + g.total);
+        NotificationService.setUnreadCount(total);
+
+      }
+    } catch (e) {
+      debugPrint("Notification count load error: $e");
+    }
+  }
+
+  void _openNotifications() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const NotificationModal(),
+    ).then((_) => _loadNotificationCount()); // refresh badge after closing
+  }
+  
 
   @override
   void dispose() {
@@ -134,36 +170,79 @@ class _MainLayoutState extends State<MainLayout> {
               ),
             ],
           ),
-          InkWell(
-            onTap: _openProfileMenu,
-            borderRadius: BorderRadius.circular(30),
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: const BoxDecoration(
-                color: Color.fromARGB(255, 254, 255, 255),
-                shape: BoxShape.circle,
+          Row(
+            children: [
+              InkWell(
+                onTap: _openNotifications,
+                borderRadius: BorderRadius.circular(30),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: NotificationService.unreadCount,
+                    builder: (context, count, _) {
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(Icons.notifications, color: Colors.white, size: 26),
+                          if (count > 0)
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                  color: Colors.redAccent,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                child: Text(
+                                  count > 99 ? "99+" : "$count",
+                                  style: const TextStyle(color: Colors.white, fontSize: 9),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
               ),
-              child: ValueListenableBuilder<Map<String, dynamic>?>(
-                valueListenable: UserService.currentUser,
-                builder: (context, user, _) {
-                  final imageUrl = user?['profile_image_url'];
-                  final name = user?['name'] ?? '';
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: _openProfileMenu,
+                borderRadius: BorderRadius.circular(30),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: const BoxDecoration(
+                    color: Color.fromARGB(255, 254, 255, 255),
+                    shape: BoxShape.circle,
+                  ),
+                  child: ValueListenableBuilder<Map<String, dynamic>?>(
+                    valueListenable: UserService.currentUser,
+                    builder: (context, user, _) {
+                      final imageUrl = user?['profile_image_url'];
+                      final name = user?['name'] ?? '';
 
-                  return ClipOval(
-                    child: (imageUrl != null && imageUrl.isNotEmpty)
-                        ? Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return _buildInitialAvatar(name);
-                            },
-                          )
-                        : _buildInitialAvatar(name),
-                  );
-                },
+                      return ClipOval(
+                        child: (imageUrl != null && imageUrl.isNotEmpty)
+                            ? Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return _buildInitialAvatar(name);
+                                },
+                              )
+                            : _buildInitialAvatar(name),
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -194,11 +273,6 @@ class _MainLayoutState extends State<MainLayout> {
       return false;
     }
 
-    // 4. We're on tab 0 (Dashboard) of this instance with nothing else open.
-    //    - Non-root AppRouter (pushed via Navigator.push from some menu):
-    //      just let the pop happen -> reveals whatever page pushed this one.
-    //    - Root AppRouter (the very first one after login): back here means
-    //      exit the app.
     if (widget.isRoot) {
       SystemNavigator.pop();
       return false;

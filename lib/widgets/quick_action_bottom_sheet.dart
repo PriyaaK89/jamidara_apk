@@ -15,7 +15,6 @@ class QuickActionItem {
   });
 }
 
-
 void showQuickActionBottomSheet(
   BuildContext context,
   Function(int) onTabChange, {

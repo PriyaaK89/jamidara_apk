@@ -21,21 +21,21 @@ class OrderPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 10),
+            const SizedBox(height: 4),
 
             const Text(
               "Transactions",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
 
-            const SizedBox(height: 6),
+            const SizedBox(height: 3),
 
             const Text(
               "Manage all transaction entries",
-              style: TextStyle(color: Colors.grey, fontSize: 14),
+              style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 0),
 
             Expanded(
               child: GridView.count(

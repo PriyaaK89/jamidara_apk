@@ -172,45 +172,45 @@ class _MainLayoutState extends State<MainLayout> {
           ),
           Row(
             children: [
-              InkWell(
-                onTap: _openNotifications,
-                borderRadius: BorderRadius.circular(30),
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  alignment: Alignment.center,
-                  child: ValueListenableBuilder<int>(
-                    valueListenable: NotificationService.unreadCount,
-                    builder: (context, count, _) {
-                      return Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          const Icon(Icons.notifications, color: Colors.white, size: 26),
-                          if (count > 0)
-                            Positioned(
-                              right: -2,
-                              top: -2,
-                              child: Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: const BoxDecoration(
-                                  color: Colors.redAccent,
-                                  shape: BoxShape.circle,
-                                ),
-                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                                child: Text(
-                                  count > 99 ? "99+" : "$count",
-                                  style: const TextStyle(color: Colors.white, fontSize: 9),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
+              // InkWell(
+              //   onTap: _openNotifications,
+              //   borderRadius: BorderRadius.circular(30),
+              //   child: Container(
+              //     width: 42,
+              //     height: 42,
+              //     alignment: Alignment.center,
+              //     child: ValueListenableBuilder<int>(
+              //       valueListenable: NotificationService.unreadCount,
+              //       builder: (context, count, _) {
+              //         return Stack(
+              //           clipBehavior: Clip.none,
+              //           children: [
+              //             const Icon(Icons.notifications, color: Colors.white, size: 26),
+              //             if (count > 0)
+              //               Positioned(
+              //                 right: -2,
+              //                 top: -2,
+              //                 child: Container(
+              //                   padding: const EdgeInsets.all(3),
+              //                   decoration: const BoxDecoration(
+              //                     color: Colors.redAccent,
+              //                     shape: BoxShape.circle,
+              //                   ),
+              //                   constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+              //                   child: Text(
+              //                     count > 99 ? "99+" : "$count",
+              //                     style: const TextStyle(color: Colors.white, fontSize: 9),
+              //                     textAlign: TextAlign.center,
+              //                   ),
+              //                 ),
+              //               ),
+              //           ],
+              //         );
+              //       },
+              //     ),
+              //   ),
+              // ),
+              // const SizedBox(width: 8),
               InkWell(
                 onTap: _openProfileMenu,
                 borderRadius: BorderRadius.circular(30),

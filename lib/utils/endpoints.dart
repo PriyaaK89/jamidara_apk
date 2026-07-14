@@ -43,4 +43,11 @@ class Endpoints {
   static const String getEmployeeVisitProgress =
       "/visit-targets/progress/employee"; // append /:employeeId
   static const String getVisitTargetHistory = "/visit-targets/progress/history";
+
+  static const String createReceiptRequest = "/create-receipt-approval-request";
+  static const String getLedgerDetailsByID = "/getLedgerDetailsById";
+
+  // NEW — confirm these match your actual backend routes
+static const String getBankAccountLedgerDropdown = "/bank-ledger-dropdown";
+
 }

@@ -8,8 +8,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../services/storage_service.dart';
 import '../../layout/main_layout.dart';
 import '../../layout/app_router.dart';
-
-
 class RoutePoint {
   final double latitude;
   final double longitude;
@@ -25,14 +23,18 @@ class RoutePoint {
     return RoutePoint(
       latitude: double.tryParse(json['latitude'].toString()) ?? 0,
       longitude: double.tryParse(json['longitude'].toString()) ?? 0,
-      recordedAt: DateTime.parse(json['recorded_at']).toLocal(),
+      recordedAt: _parseUtcToLocal(json['recorded_at']),
     );
   }
 
   LatLng get latLng => LatLng(latitude, longitude);
 
 }
-
+DateTime _parseUtcToLocal(String raw) {
+  final normalized = raw.contains('T') ? raw : raw.replaceFirst(' ', 'T');
+  final utc = normalized.endsWith('Z') ? normalized : '${normalized}Z';
+  return DateTime.parse(utc).toLocal();
+}
 class LevelUserTrack {
   final int id;
   final String name;

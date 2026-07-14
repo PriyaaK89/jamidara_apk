@@ -115,12 +115,8 @@ class OrderPage extends StatelessWidget {
                     title: "Receipt",
                     icon: Icons.account_balance_wallet,
                     color: Colors.teal,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ReceiptPage()),
-                      );
-                    },
+                     onTap: () { onOpenPage(const ReceiptApprovalRequestPage()); },
+                 
                   ),
                 ],
               ),

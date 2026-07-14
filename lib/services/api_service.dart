@@ -1256,20 +1256,10 @@ class ApiService {
   static Future<List<dynamic>> getMyAssignedLedgers() async {
   try {
     final prefs = await SharedPreferences.getInstance();
-
-    final baseUrl =
-        prefs.getString("FLUTTER_BASE_URL") ?? "";
-
-    final token =
-        await StorageService.getToken();
-
-    final response = await http.get(
-      Uri.parse(
-        "$baseUrl${Endpoints.getMyAssignedLedgers}",
-      ),
-      headers: {
-        "Authorization": "Bearer $token",
-      },
+    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+    final token = await StorageService.getToken();
+    final response = await http.get( Uri.parse( "$baseUrl${Endpoints.getMyAssignedLedgers}", ),
+      headers: { "Authorization": "Bearer $token", },
     );
 
     final json = jsonDecode(response.body);
@@ -1477,4 +1467,91 @@ static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
       return {"success": false, "message": "Exception occurred: $e"};
     }
   }
+
+  // ── Receipt Approval Request: dropdowns ──────────────────────────────
+
+static Future<Map<String, dynamic>> getBankAccountLedgerDropdown() async {
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+  final token = await StorageService.getToken();
+  final url = Uri.parse('$baseUrl${Endpoints.getBankAccountLedgerDropdown}');
+
+  try {
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {"success": false, "message": "Exception occurred: $e"};
+  }
+}
+
+static Future<Map<String, dynamic>> getLedgerDetailsById(String ledgerId) async {
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+  final token = await StorageService.getToken();
+  final url = Uri.parse('$baseUrl${Endpoints.getLedgerDetailsByID}/$ledgerId');
+
+  try {
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {"success": false, "message": "Exception occurred: $e"};
+  }
+}
+
+// ── Receipt Approval Request: submit ─────────────────────────────────
+
+static Future<Map<String, dynamic>> createReceiptApprovalRequest({
+  required String accountLedgerId,
+  required String receiptDate,
+  String? employeeUnderId,
+  required String narration,
+  required double totalAmount,
+  required List<Map<String, dynamic>> entries,
+  required File attachment,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+  final token = await StorageService.getToken();
+  final url = Uri.parse('$baseUrl${Endpoints.createReceiptRequest}');
+
+  try {
+    final request = http.MultipartRequest('POST', url);
+    request.headers['Authorization'] = 'Bearer $token';
+
+    request.fields['account_ledger_id'] = accountLedgerId;
+    request.fields['receipt_date'] = receiptDate;
+    request.fields['narration'] = narration;
+    request.fields['total_amount'] = totalAmount.toString();
+    if (employeeUnderId != null && employeeUnderId.isNotEmpty) {
+      request.fields['employee_under_id'] = employeeUnderId;
+    }
+    request.fields['entries'] = jsonEncode(entries);
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'attachment',
+        attachment.path,
+        contentType: MediaType('image', 'jpeg'),
+      ),
+    );
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {"success": false, "message": "Exception occurred: $e"};
+  }
+}
 }

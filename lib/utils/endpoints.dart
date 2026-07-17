@@ -49,5 +49,12 @@ class Endpoints {
 
   // NEW — confirm these match your actual backend routes
 static const String getBankAccountLedgerDropdown = "/bank-ledger-dropdown";
+static const String createPurchaseApprovalRequest = "/create-purchase-approval-request";
 
+  static const String createCreditNoteApprovalRequest =
+      "/create-credit-note-approval-request";
+  static const String getSalesByCustomer = "/get-sales-by-customer";
+  static const String getSaleItemsById = "/get-sales-item"; // + /$saleId/items
+  static const String getSalesBillReferences = "/sales-bill-references";
+  static const String getSalesReturnLedgers = "/sales-ledger-dropdown";
 }

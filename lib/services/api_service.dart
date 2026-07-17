@@ -9,6 +9,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 import '../utils/sales_item.dart';
+import '../utils/purchase_item.dart';
+import '../utils/credit_note_item.dart';
 
 class ApiService {
   // Login API
@@ -1158,23 +1160,16 @@ class ApiService {
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
       final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
-
       final token = await StorageService.getToken();
 
-      var request = http.MultipartRequest(
-        "POST",
-        Uri.parse("$baseUrl${Endpoints.createSalesApprovalRequest}"),
-      );
+      var request = http.MultipartRequest( "POST", Uri.parse("$baseUrl${Endpoints.createSalesApprovalRequest}"),);
 
       request.headers.addAll({"Authorization": "Bearer $token"});
 
       final payload = {
         "customer_ledger_id": ledgerId,
-
         "is_consignee": isConsignee ? 1 : 0,
-
         "dealer_name": dealerName ?? "",
         "proprietor_name": proprietorName ?? "",
         "consignee_contact_no": consigneeContactNo ?? "",
@@ -1552,6 +1547,267 @@ static Future<Map<String, dynamic>> createReceiptApprovalRequest({
     return jsonDecode(response.body);
   } catch (e) {
     return {"success": false, "message": "Exception occurred: $e"};
+  }
+}
+
+static Future<Map<String, dynamic>> createPurchaseApprovalRequest({
+    required int supplierLedgerId,
+    required int purchaseLedgerId,
+    required String supplierInvoiceNo,
+    required String narration,
+
+    required double subtotal,
+    required double igstTotal,
+    required double cgstTotal,
+    required double sgstTotal,
+    required double totalAmount,
+    required String taxMode,
+
+    required List<PurchaseItem> items,
+
+    required File orderBillImage,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+      final token = await StorageService.getToken();
+
+      var request = http.MultipartRequest(
+        "POST",
+        Uri.parse("$baseUrl${Endpoints.createPurchaseApprovalRequest}"),
+      );
+
+      request.headers.addAll({"Authorization": "Bearer $token"});
+
+      final payload = {
+        "supplier_ledger_id": supplierLedgerId,
+        "purchase_ledger_id": purchaseLedgerId,
+        "supplier_invoice_no": supplierInvoiceNo,
+
+        "subtotal": subtotal,
+        "igst_total": igstTotal,
+        "cgst_total": cgstTotal,
+        "sgst_total": sgstTotal,
+        "total_amount": totalAmount,
+        "tax_mode": taxMode,
+
+        "narration": narration,
+
+        "items": items.map((e) => e.toJson()).toList(),
+      };
+
+      payload.forEach((key, value) {
+        request.fields[key] = jsonEncode(value);
+      });
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          "orderBillImage",
+          orderBillImage.path,
+        ),
+      );
+
+      final response = await request.send();
+      final body = await response.stream.bytesToString();
+
+      return jsonDecode(body);
+    } catch (e) {
+      return {"success": false, "message": e.toString()};
+    }
+  }
+
+  // ── Credit Note: Party sales history (Option A) ─────────────────────────
+static Future<List<dynamic>> getSalesByCustomer(int customerLedgerId) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+    final token = await StorageService.getToken();
+
+    final url = Uri.parse(
+      "$baseUrl${Endpoints.getSalesByCustomer}?customer_ledger_id=$customerLedgerId",
+    );
+
+    final response = await http.get(
+      url,
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    final data = jsonDecode(response.body);
+    if (data["success"] == true) {
+      return data["data"] ?? [];
+    }
+    return [];
+  } catch (e) {
+    debugPrint("getSalesByCustomer error: $e");
+    return [];
+  }
+}
+
+static Future<List<dynamic>> getSaleItemsById(int saleId) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+    final token = await StorageService.getToken();
+
+    final url = Uri.parse(
+      "$baseUrl${Endpoints.getSaleItemsById}/$saleId/items",
+    );
+
+    final response = await http.get(
+      url,
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    final data = jsonDecode(response.body);
+    if (data["success"] == true) {
+      return data["data"] ?? [];
+    }
+    return [];
+  } catch (e) {
+    debugPrint("getSaleItemsById error: $e");
+    return [];
+  }
+}
+
+static Future<List<dynamic>> getSalesBillReferences(int saleId) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+    final token = await StorageService.getToken();
+
+    final url = Uri.parse(
+      "$baseUrl${Endpoints.getSalesBillReferences}?sale_id=$saleId",
+    );
+
+    final response = await http.get(
+      url,
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    final data = jsonDecode(response.body);
+    if (data["success"] == true) {
+      return data["data"] ?? [];
+    }
+    return [];
+  } catch (e) {
+    debugPrint("getSalesBillReferences error: $e");
+    return [];
+  }
+}
+
+// ── Sales Return ledger dropdown ─────────────────────────────────────────
+static Future<List<dynamic>> getSalesReturnLedgers() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+    final token = await StorageService.getToken();
+
+    final url = Uri.parse("$baseUrl${Endpoints.getSalesReturnLedgers}");
+
+    final response = await http.get(
+      url,
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    final data = jsonDecode(response.body);
+    if (data["success"] == true) {
+      return data["data"] ?? [];
+    }
+    return [];
+  } catch (e) {
+    debugPrint("getSalesReturnLedgers error: $e");
+    return [];
+  }
+}
+
+// ── Submit Credit Note Approval Request ──────────────────────────────────
+static Future<Map<String, dynamic>> createCreditNoteApprovalRequest({
+  required int customerLedgerId,
+  required String creditNoteDate,
+  int? originalSaleId, // null in manual mode
+  required int salesReturnLedgerId,
+  required bool isConsignee,
+  String? dealerName,
+  String? proprietorName,
+  String? consigneeContactNo,
+  String? consigneeAddress,
+  String? consigneeGstnNo,
+
+  required double subtotal,
+  required double igstTotal,
+  required double cgstTotal,
+  required double sgstTotal,
+  required double taxTotal,
+  required double totalAmount,
+
+  required String narration,
+  required List<CreditNoteItem> items,
+  required List<Map<String, dynamic>> billReferences,
+
+  File? billTImage,
+  File? dispatchDocImage,
+}) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+    final token = await StorageService.getToken();
+
+    var request = http.MultipartRequest(
+      "POST",
+      Uri.parse("$baseUrl${Endpoints.createCreditNoteApprovalRequest}"),
+    );
+
+    request.headers.addAll({"Authorization": "Bearer $token"});
+
+    final payload = {
+      "customer_ledger_id": customerLedgerId,
+      "credit_note_date": creditNoteDate,
+      "original_sale_id": originalSaleId,
+      "sales_return_ledger_id": salesReturnLedgerId,
+      "is_consignee": isConsignee,
+      "dealer_name": dealerName ?? "",
+      "proprietor_name": proprietorName ?? "",
+      "consignee_contact_no": consigneeContactNo ?? "",
+      "consignee_address": consigneeAddress ?? "",
+      "consignee_gstn_no": consigneeGstnNo ?? "",
+
+      "subtotal": subtotal,
+      "igst_total": igstTotal,
+      "cgst_total": cgstTotal,
+      "sgst_total": sgstTotal,
+      "tax_total": taxTotal,
+      "total_amount": totalAmount,
+      "narration": narration,
+
+      "items": items.map((e) => e.toJson()).toList(),
+      "bill_references": billReferences,
+    };
+
+    payload.forEach((key, value) {
+      request.fields[key] = jsonEncode(value);
+    });
+
+    if (billTImage != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath("bill_t_image", billTImage.path),
+      );
+    }
+
+    if (dispatchDocImage != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          "dispatch_doc_image",
+          dispatchDocImage.path,
+        ),
+      );
+    }
+
+    final response = await request.send();
+    final body = await response.stream.bytesToString();
+
+    return jsonDecode(body);
+  } catch (e) {
+    return {"success": false, "message": e.toString()};
   }
 }
 }

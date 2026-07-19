@@ -350,8 +350,8 @@ class ApiService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     }
-    print("📡 STATUS CODE: ${response.statusCode}");
-    print("📦 BODY: ${response.body}");
+    print(" STATUS CODE: ${response.statusCode}");
+    print(" BODY: ${response.body}");
 
     return null;
   }
@@ -1751,6 +1751,7 @@ static Future<Map<String, dynamic>> createCreditNoteApprovalRequest({
     final prefs = await SharedPreferences.getInstance();
     final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
     final token = await StorageService.getToken();
+    final creatorId = await StorageService.getEmployeeId();
 
     var request = http.MultipartRequest(
       "POST",
@@ -1765,6 +1766,7 @@ static Future<Map<String, dynamic>> createCreditNoteApprovalRequest({
       "original_sale_id": originalSaleId,
       "sales_return_ledger_id": salesReturnLedgerId,
       "is_consignee": isConsignee,
+      "employee_under_id": creatorId,
       "dealer_name": dealerName ?? "",
       "proprietor_name": proprietorName ?? "",
       "consignee_contact_no": consigneeContactNo ?? "",

@@ -10,6 +10,7 @@ class CreditNoteItem {
   double altUnitQty = 0;
   String altUnitName = "";
 
+
   int? godownId;
   String? godownName;
   String batchNo = "";
@@ -33,12 +34,14 @@ class CreditNoteItem {
   // ── Serialize for the "items" multipart field ──────────────────────
   Map<String, dynamic> toJson() => {
         "stock_item_id": stockItemId,
+        "item_name": itemName, 
         "godown_id": godownId,
         "batch_no": batchNo.isEmpty ? null : batchNo,
         "available_qty": availableQty,
         "return_qty": returnQty,
         "rate": rate,
         "unit_id": unitId,
+        "unit_name": unitName,
         "alt_unit_id": altUnitId,
         "alt_unit_qty": altUnitQty,
         "amount": amount,

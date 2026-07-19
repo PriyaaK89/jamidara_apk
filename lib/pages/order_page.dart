@@ -72,14 +72,8 @@ class OrderPage extends StatelessWidget {
                     title: "Credit Note",
                     icon: Icons.assignment_return,
                     color: Colors.orange,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const CreditNotePage(),
-                        ),
-                      );
-                    },
+                     onTap: () { onOpenPage(const CreditNotePage()); },
+                   
                   ),
 
                   _buildMenuCard(

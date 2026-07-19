@@ -185,9 +185,9 @@ class _CreditNotePageState extends State<CreditNotePage> {
       row.unitName = data["base_unit_name"] ?? "";
       row.rate = _toDouble(openingStock?["rate"]);
       row.availableQty = _toDouble(openingStock?["quantity"]);
-      row.batchNo = openingStock?["batch_no"]?.toString() ?? "";
-      row.godownId = openingStock?["godown_id"];
-      row.godownName = openingStock?["godown_name"]?.toString();
+      // row.batchNo = openingStock?["batch_no"]?.toString() ?? "";
+      // row.godownId = openingStock?["godown_id"];
+      // row.godownName = openingStock?["godown_name"]?.toString();
       row.cgstPercent = _toDouble(gstDetails?["central_tax"]);
       row.sgstPercent = _toDouble(gstDetails?["state_tax"]);
       row.igstPercent = _toDouble(gstDetails?["integrated_tax"]);
@@ -223,19 +223,74 @@ class _CreditNotePageState extends State<CreditNotePage> {
     });
   }
 
-  Future<void> pickImage(bool isBillT) async {
-    final XFile? image =
-        await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
-    if (image != null) {
-      setState(() {
-        if (isBillT) {
-          billTImage = File(image.path);
-        } else {
-          dispatchDocImage = File(image.path);
-        }
-      });
-    }
+  // Future<void> pickImage(bool isBillT) async {
+  //   final XFile? image =
+  //       await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+  //   if (image != null) {
+  //     setState(() {
+  //       if (isBillT) {
+  //         billTImage = File(image.path);
+  //       } else {
+  //         dispatchDocImage = File(image.path);
+  //       }
+  //     });
+  //   }
+  // }
+  Future<void> pickImage(bool isBillT, ImageSource source) async {
+  final XFile? image =
+      await picker.pickImage(source: source, imageQuality: 80);
+  if (image != null) {
+    setState(() {
+      if (isBillT) {
+        billTImage = File(image.path);
+      } else {
+        dispatchDocImage = File(image.path);
+      }
+    });
   }
+}
+
+void showImageSourceSheet(bool isBillT) {
+  FocusScope.of(context).requestFocus(FocusNode());
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (context) {
+      return SafeArea(
+        child: Wrap(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Text(
+                isBillT ? "Add Bill-T Image" : "Add Dispatch Doc Image",
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined, color: Colors.teal),
+              title: const Text("Take a photo"),
+              onTap: () {
+                Navigator.pop(context);
+                pickImage(isBillT, ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: Colors.teal),
+              title: const Text("Choose from gallery"),
+              onTap: () {
+                Navigator.pop(context);
+                pickImage(isBillT, ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      );
+    },
+  );
+}
 
   double get subtotal => creditNoteItems.fold(0.0, (s, i) => s + i.amount);
   double get igstTotal =>
@@ -267,7 +322,7 @@ class _CreditNotePageState extends State<CreditNotePage> {
       _showSnack("Add at least one item with return quantity");
       return;
     }
-    if (billTImage == null || dispatchDocImage == null) {
+    if (billTImage == null ) {
       _showSnack("Bill-T image and Dispatch Document image are required");
       return;
     }
@@ -808,19 +863,33 @@ class _CreditNotePageState extends State<CreditNotePage> {
     );
   }
 
+  // Widget _buildImageSection() {
+  //   return Row(
+  //     children: [
+  //       Expanded(
+  //           child: _imageUploadCard(
+  //               "Bill-T Image", billTImage, () => pickImage(true))),
+  //       const SizedBox(width: 10),
+  //       Expanded(
+  //           child: _imageUploadCard("Dispatch Doc Image", dispatchDocImage,
+  //               () => pickImage(false))),
+  //     ],
+  //   );
+  // }
+
   Widget _buildImageSection() {
-    return Row(
-      children: [
-        Expanded(
-            child: _imageUploadCard(
-                "Bill-T Image", billTImage, () => pickImage(true))),
-        const SizedBox(width: 10),
-        Expanded(
-            child: _imageUploadCard("Dispatch Doc Image", dispatchDocImage,
-                () => pickImage(false))),
-      ],
-    );
-  }
+  return Row(
+    children: [
+      Expanded(
+          child: _imageUploadCard(
+              "Bill-T Image", billTImage, () => showImageSourceSheet(true))),
+      const SizedBox(width: 10),
+      Expanded(
+          child: _imageUploadCard("Dispatch Doc Image", dispatchDocImage,
+              () => showImageSourceSheet(false))),
+    ],
+  );
+}
 
   Widget _imageUploadCard(String label, File? file, VoidCallback onTap) {
     return Card(

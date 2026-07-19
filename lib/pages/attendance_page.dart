@@ -22,6 +22,7 @@ class AttendancePage extends StatefulWidget {
   final int employeeId;
   final String token;
 
+
   const AttendancePage({
     super.key,
     required this.employeeId,
@@ -43,6 +44,7 @@ class _AttendancePageState extends State<AttendancePage> {
   String odometerReading = '';
   String? currentLocation;
   String leaveReason = '';
+    TimeOfDay? loginTime;
 
   File? selfieImage;
   File? odometerImage;
@@ -52,6 +54,33 @@ class _AttendancePageState extends State<AttendancePage> {
 
   Map<String, dynamic>? todayAttendance;
   bool isFetchingAttendance = false;
+
+   @override
+  void initState() {
+    super.initState();
+    fetchProfileTimings();
+  }
+
+   Future<void> fetchProfileTimings() async {
+    final profile = await ApiService.getProfile();
+    if (profile != null && profile["success"] == true) {
+      final data = profile["data"];
+      setState(() {
+        loginTime = _parseTimeOfDay(data["login_time"]);  
+      });
+    }
+  }
+
+  TimeOfDay? _parseTimeOfDay(String? time) {
+    if (time == null || !time.contains(":")) return null;
+    final parts = time.split(":");
+    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+  }
+
+  DateTime _todayWithTime(TimeOfDay t) {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day, t.hour, t.minute);
+  }
   Future<void> fetchTodayAttendance() async {
     try {
       setState(() {
@@ -330,6 +359,25 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
       );
       return;
     }
+
+    final now = DateTime.now();
+
+     if (attendanceType == "present" && loginTime != null) {
+    final allowedLogin = _todayWithTime(loginTime!);
+    if (now.isBefore(allowedLogin)) {
+      Flushbar(
+        message: "You can't check in before ${loginTime!.format(context)}",
+        duration: const Duration(seconds: 3),
+        flushbarPosition: FlushbarPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        margin: const EdgeInsets.all(20),
+        borderRadius: BorderRadius.circular(8),
+        icon: const Icon(Icons.access_time, color: Colors.white),
+      ).show(context);
+      return;
+    }
+  }
+
 
     setState(() {
       isLoading = true;

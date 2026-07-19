@@ -82,6 +82,9 @@ class _VisitPageState extends State<VisitPage> {
 
   String? visitPurpose;
 
+   TimeOfDay? loginTime;
+  TimeOfDay? visitUpto;
+
   final TextEditingController firmNameController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
   final TextEditingController contactNumberController = TextEditingController();
@@ -191,6 +194,29 @@ class _VisitPageState extends State<VisitPage> {
   void initState() {
     super.initState();
     _loadLogo();
+     _fetchVisitTimings();
+  }
+
+   Future<void> _fetchVisitTimings() async {
+    final profile = await ApiService.getProfile();
+    if (profile != null && profile["success"] == true) {
+      final data = profile["data"];
+      setState(() {
+        loginTime = _parseTimeOfDay(data["login_time"]);   // e.g. "10:00:00"
+        visitUpto = _parseTimeOfDay(data["visit_upto"]);   // e.g. "19:30:00"
+      });
+    }
+  }
+
+   TimeOfDay? _parseTimeOfDay(String? time) {
+    if (time == null || !time.contains(":")) return null;
+    final parts = time.split(":");
+    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+  }
+
+  DateTime _todayWithTime(TimeOfDay t) {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day, t.hour, t.minute);
   }
 
   Future<void> _loadLogo() async {
@@ -632,91 +658,98 @@ class _VisitPageState extends State<VisitPage> {
     );
   }
 
-  Future<void> _submitForm() async {
-    if (attendanceType == null) {
-      _showFlushbar("Please select attendance type");
-      return;
-    }
+Future<void> _submitForm() async {
+  final now = DateTime.now();
 
-    if (customerType == null) {
-      _showFlushbar("Please select customer type");
-      return;
-    }
+  if (visitUpto != null && now.isAfter(_todayWithTime(visitUpto!))) {
+    _showFlushbar(
+      "Visit submission time is over (allowed till ${visitUpto!.format(context)})",
+    );
+    return;
+  }
+  if (attendanceType == null) {
+    _showFlushbar("Please select attendance type");
+    return;
+  }
+  if (customerType == null) {
+    _showFlushbar("Please select customer type");
+    return;
+  }
+  if (visitPurpose == null) {
+    _showFlushbar("Please select visit purpose");
+    return;
+  }
+  if (customerType == "Old Customer" && selectedCustomerId == null) {
+    _showFlushbar("Please select old customer");
+    return;
+  }
+  if (_selectedImage == null) {
+    _showFlushbar("Please upload image");
+    return;
+  }
 
-    if (visitPurpose == null) {
-      _showFlushbar("Please select visit purpose");
-      return;
-    }
+  setState(() {
+    isSubmitting = true;
+  });
 
-    if (customerType == "Old Customer" && selectedCustomerId == null) {
-      _showFlushbar("Please select old customer");
-      return;
-    }
+  try {
+    final response = await ApiService.uploadVisit(
+      visitType: attendanceType!,
+      customerType: customerType!,
+      customerId: selectedCustomerId,
+      name: nameController.text.trim(),
+      firm_name: firmNameController.text.trim(),
+      firm_address: firmAddressController.text.trim(),
+      contactNumber: contactNumberController.text.trim(),
+      address: addressController.text.trim(),
+      district: districtController.text.trim(),
+      visitPurpose: visitPurpose!,
+      comment: commentController.text.trim(),
+      reminderDate: reminderDateController.text.trim().isEmpty
+          ? null
+          : reminderDateController.text.trim(),
+      pincode: pincodeController.text.trim(),
+      area: selectedArea ?? '',
+      image: _selectedImage,
+    );
 
-    //  OPTIONAL (better UX)
-    if (_selectedImage == null) {
-      _showFlushbar("Please upload image");
-      return;
-    }
+    final bool success = response["success"] == true;
+    final String message = (response["message"] ?? '').toString();
 
-    setState(() {
-      isSubmitting = true;
-    });
-    print("customerId: $selectedCustomerId");
-    try {
-      final response = await ApiService.uploadVisit(
-        visitType: attendanceType!,
-        customerType: customerType!,
-        customerId: selectedCustomerId,
-        name: nameController.text.trim(),
-        firm_name: firmNameController.text.trim(),
-        firm_address: firmAddressController.text.trim(),
-        contactNumber: contactNumberController.text.trim(),
-        address: addressController.text.trim(),
-        district: districtController.text.trim(),
-        visitPurpose: visitPurpose!,
-        comment: commentController.text.trim(),
-        // reminderDate: reminderDateController.text.trim(),
-        reminderDate: reminderDateController.text.trim().isEmpty
-            ? null
-            : reminderDateController.text.trim(),
-        pincode: pincodeController.text.trim(),
-        area: selectedArea ?? '',
-        image: _selectedImage,
-      );
+    if (success) {
+      _resetForm();
+      _showFlushbar(message.isNotEmpty ? message : "Visit submitted", isSuccess: true);
 
-      bool success = response["success"];
-      String message = response["message"];
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove("last_notify_time");
+      final token = prefs.getString("token") ?? "";
 
-      if (success) {
-        _resetForm();
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove("last_notify_time");
-        final token = prefs.getString("token") ?? "";
-
-        final visitRes = await ApiService.getTodayVisitCount(token);
-
-        if (visitRes["success"] == true) {
-          _showFlushbar(message, isSuccess: success);
-
-          if (mounted) {
-            setState(() {
-              isSubmitting = false;
-            });
-          }
-
-          int visits = visitRes["totalVisits"] ?? visitRes["visits"] ?? 0;
-
-          if (visits < 4) {
-            await Future.delayed(const Duration(seconds: 1));
-            await showVisitReminderDialog(visits);
-          }
+      final visitRes = await ApiService.getTodayVisitCount(token);
+      if (visitRes["success"] == true) {
+        int visits = visitRes["totalVisits"] ?? visitRes["visits"] ?? 0;
+        if (visits < 4) {
+          await Future.delayed(const Duration(seconds: 1));
+          await showVisitReminderDialog(visits);
         }
       }
-    } catch (e) {
-      _showFlushbar("Submission failed: $e");
+    } else {
+      _showFlushbar(_friendlyErrorMessage(message));
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        isSubmitting = false;
+      });
     }
   }
+}
+
+String _friendlyErrorMessage(String rawMessage) {
+  if (rawMessage.contains('unique_customer') || rawMessage.contains('Duplicate entry')) {
+    return "A customer with this mobile number already exists for this visit type.";
+  }
+  return rawMessage.isNotEmpty ? rawMessage : "Submission failed. Please try again.";
+}
 
   Widget _sectionCard({required String title, required Widget child}) {
     return Container(
@@ -1041,55 +1074,64 @@ class _VisitPageState extends State<VisitPage> {
                           child: Center(child: CircularProgressIndicator()),
                         )
                       else
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 14),
-                          child: DropdownSearch<Map<String, dynamic>>(
-                            key: ValueKey(customerDropdownKey),
-                            items: customerList,
-                            itemAsString: (item) =>
-                                item['name']?.toString() ?? '',
-                            selectedItem: customerList
-                                .cast<Map<String, dynamic>?>()
-                                .firstWhere(
-                                  (item) => item?['id'] == selectedCustomerId,
-                                  orElse: () => null,
-                                ),
-                            dropdownDecoratorProps: DropDownDecoratorProps(
-                              dropdownSearchDecoration: _dropdownDecoration()
-                                  .copyWith(hintText: "Select Customer"),
-                            ),
-                            popupProps: PopupProps.bottomSheet(
-                              showSearchBox: true,
-                              bottomSheetProps: const BottomSheetProps(
-                                elevation: 8,
-                                backgroundColor: Colors.white,
-                              ),
-                              searchFieldProps: TextFieldProps(
-                                decoration: InputDecoration(
-                                  hintText: "Search Customer",
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            compareFn: (item, selectedItem) =>
-                                item['id'] == selectedItem['id'],
-                            onChanged: (value) async {
-                              if (value == null) return;
+                     Container(
+  margin: const EdgeInsets.only(bottom: 14),
+  child: DropdownSearch<Map<String, dynamic>>(
+    key: ValueKey(customerDropdownKey),
+    items: customerList,
+    itemAsString: (item) {
+      final name = item['name']?.toString() ?? '';
+      final number = item['contact_number']?.toString() ?? '';
+      return number.isNotEmpty ? "$name ($number)" : name;
+    },
+    selectedItem: customerList
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) => item?['id'] == selectedCustomerId,
+          orElse: () => null,
+        ),
+    dropdownDecoratorProps: DropDownDecoratorProps(
+      dropdownSearchDecoration: _dropdownDecoration()
+          .copyWith(hintText: "Select Customer"),
+    ),
+    popupProps: PopupProps.bottomSheet(
+      showSearchBox: true,
+      bottomSheetProps: const BottomSheetProps(
+        elevation: 8,
+        backgroundColor: Colors.white,
+      ),
+      searchFieldProps: TextFieldProps(
+        decoration: InputDecoration(
+          hintText: "Search by Name or Mobile",
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+        ),
+      ),
+    ),
+    filterFn: (item, filter) {
+      final query = filter.toLowerCase();
+      final name = (item['name'] ?? '').toString().toLowerCase();
+      final number = (item['contact_number'] ?? '').toString().toLowerCase();
+      return name.contains(query) || number.contains(query);
+    },
+    compareFn: (item, selectedItem) =>
+        item['id'] == selectedItem['id'],
+    onChanged: (value) async {
+      if (value == null) return;
 
-                              setState(() {
-                                selectedCustomerId = value['id'] as int;
-                              });
+      setState(() {
+        selectedCustomerId = value['id'] as int;
+      });
 
-                              await _fetchCustomerDetails(value['id'] as int);
-                            },
-                          ),
-                        ),
+      await _fetchCustomerDetails(value['id'] as int);
+    },
+  ),
+),
 
                       _customTextField(
                         hint: "Firm Address",

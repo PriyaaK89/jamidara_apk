@@ -18,6 +18,7 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
   List<dynamic> stockItems = [];
 
   Map<String, dynamic>? selectedLedger;
+  bool isLedgerBlocked = false;
 
   bool isConsignee = false;
   bool isSupercash = false;
@@ -78,8 +79,6 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
     }
   }
 
-  
-
   // ---------------- Image ----------------
 
   Future<void> pickImage(ImageSource source) async {
@@ -105,12 +104,12 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
   }
 
   void _recalculateItem(SalesItem item) {
-  final effectiveRate = isSupercash ? item.supercashRate : item.rate;
-  item.amount = item.billedQty * effectiveRate;
+    final effectiveRate = isSupercash ? item.supercashRate : item.rate;
+    item.amount = item.billedQty * effectiveRate;
 
-  final taxPercent = item.cgstPercent + item.sgstPercent + item.igstPercent;
-  item.totalAmount = item.amount + (item.amount * taxPercent / 100);
-}
+    final taxPercent = item.cgstPercent + item.sgstPercent + item.igstPercent;
+    item.totalAmount = item.amount + (item.amount * taxPercent / 100);
+  }
 
   void onQtyChanged(SalesItem item, String value) {
     setState(() {
@@ -129,13 +128,13 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
   }
 
   void _applyGstSelection(SalesItem item) {
-  if (item.igstPercent > 0) {
-    item.cgstPercent = 0;
-    item.sgstPercent = 0;
-  } else {
-    item.igstPercent = 0;
+    if (item.igstPercent > 0) {
+      item.cgstPercent = 0;
+      item.sgstPercent = 0;
+    } else {
+      item.igstPercent = 0;
+    }
   }
-}
 
   void showImageSourceSheet() {
     FocusScope.of(context).requestFocus(FocusNode());
@@ -239,9 +238,8 @@ class _SalesOrderPageState extends State<SalesOrderPage> {
       row.cgstPercent = _toDouble(gstDetails?["central_tax"]);
       row.sgstPercent = _toDouble(gstDetails?["state_tax"]);
       row.igstPercent = _toDouble(gstDetails?["integrated_tax"]);
-      _applyGstSelection(row);   // <-- add this line
-_recalculateItem(row);
-
+      _applyGstSelection(row); // <-- add this line
+      _recalculateItem(row);
 
       if (mounted) setState(() {});
     } catch (e) {
@@ -249,20 +247,106 @@ _recalculateItem(row);
     }
   }
 
-  // ---------------- Totals ----------------
+  //   Future<void> _checkLedgerOverdue(int ledgerId) async {
+  //   try {
+  //     final response = await ApiService.checkLedgerOverdueStatus(ledgerId);
 
+  //     if (response["success"] == true && response["has_overdue"] == true) {
+  //       final overdueBills = response["overdue_bills"] as List<dynamic>;
+  //       if (mounted) _showOverdueBillsDialog(overdueBills);
+  //     }
+  //   } catch (e) {
+  //     // silent fail is acceptable here - this is a pre-check, not the final gate;
+  //     // the real enforcement still happens server-side on submit
+  //   }
+  // }
+  Future<void> _checkLedgerOverdue(int ledgerId) async {
+    try {
+      final response = await ApiService.checkLedgerOverdueStatus(ledgerId);
+
+      if (response["success"] == true && response["has_overdue"] == true) {
+        final overdueBills = response["overdue_bills"] as List<dynamic>;
+        setState(() => isLedgerBlocked = true); // NEW - block submission
+        if (mounted) _showOverdueBillsDialog(overdueBills);
+      } else {
+        setState(() => isLedgerBlocked = false); // NEW - clear on valid ledger
+      }
+    } catch (e) {
+      debugPrint("OVERDUE CHECK EXCEPTION: $e");
+    }
+  }
+
+ void _showOverdueBillsDialog(List<dynamic> overdueBills) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      title: const Text(
+        "OVERDUE BILLS",
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 24),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "(PLEASE PAY DUE BILLS FIRST)",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            ...overdueBills.map((b) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    "Voucher - ${b['voucher_no']},Bill Date - ${b['bill_date']},"
+                    "Bill Amt - ${b['bill_amount']},Duration - ${b['duration_days']} days",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                  ),
+                )),
+          ],
+        ),
+      ),
+      actions: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              // Selection stays as-is; user must manually clear via the X button.
+            },
+            child: const Text(
+              "CLOSE",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
   double getSubTotal() {
     return salesItems.fold(0, (sum, item) => sum + item.amount);
   }
 
   double getTaxTotal() {
-  double total = 0;
-  for (var item in salesItems) {
-    final taxPercent = item.cgstPercent + item.sgstPercent + item.igstPercent;
-    total += item.amount * taxPercent / 100;
+    double total = 0;
+    for (var item in salesItems) {
+      final taxPercent = item.cgstPercent + item.sgstPercent + item.igstPercent;
+      total += item.amount * taxPercent / 100;
+    }
+    return total;
   }
-  return total;
-}
 
   double getGrandTotal() => getSubTotal() + getTaxTotal();
 
@@ -363,6 +447,10 @@ _recalculateItem(row);
       _showSnack("Please select a ledger");
       return;
     }
+      if (isLedgerBlocked) {  // NEW
+    _showSnack("Cannot submit — this ledger has overdue bills. Please select a different party.");
+    return;
+  }
 
     if (orderBillImage == null) {
       _showSnack("Please upload the bill image");
@@ -399,6 +487,7 @@ _recalculateItem(row);
       totalAmount: getGrandTotal(),
       items: validItems,
       orderBillImage: orderBillImage!,
+      
     );
 
     if (!mounted) return;
@@ -559,11 +648,21 @@ _recalculateItem(row);
                   .toLowerCase()
                   .contains(query),
               showClear: selectedLedger != null,
-              onClear: () => setState(() => selectedLedger = null),
+              // onClear: () => setState(() => selectedLedger = null),
+              onClear: () => setState(() {
+                selectedLedger = null;
+                isLedgerBlocked = false; // NEW
+              }),
               // onSelected: (selection) => setState(() => selectedLedger = selection),
-              onSelected: (selection) {
+              onSelected: (selection) async {
                 FocusScope.of(context).unfocus();
                 setState(() => selectedLedger = selection);
+
+                final ledgerId = selection["id"];
+                debugPrint("LEDGER SELECTED: $ledgerId");
+                if (ledgerId is int) {
+                  await _checkLedgerOverdue(ledgerId);
+                }
               },
               optionBuilder: (o) => Padding(
                 padding: const EdgeInsets.symmetric(
@@ -589,6 +688,30 @@ _recalculateItem(row);
                 ),
               ),
             ),
+            if (isLedgerBlocked) ...[
+  const SizedBox(height: 10),
+  Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.red.shade50,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.red.shade200),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+        const SizedBox(width: 8),
+        const Expanded(
+          child: Text(
+            "This ledger has overdue bills. Please clear the selection and choose a different party, or ask them to pay the overdue amount first.",
+            style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
+    ),
+  ),
+],
             if (selectedLedger != null) ...[
               const SizedBox(height: 12),
               Row(
@@ -841,11 +964,20 @@ _recalculateItem(row);
                       ),
                       _smallChip("Unit", item.unitName),
                       if (item.igstPercent > 0)
-  _smallChip("IGST", "${item.igstPercent.toStringAsFixed(1)}%")
-else ...[
-  _smallChip("CGST", "${item.cgstPercent.toStringAsFixed(1)}%"),
-  _smallChip("SGST", "${item.sgstPercent.toStringAsFixed(1)}%"),
-],
+                        _smallChip(
+                          "IGST",
+                          "${item.igstPercent.toStringAsFixed(1)}%",
+                        )
+                      else ...[
+                        _smallChip(
+                          "CGST",
+                          "${item.cgstPercent.toStringAsFixed(1)}%",
+                        ),
+                        _smallChip(
+                          "SGST",
+                          "${item.sgstPercent.toStringAsFixed(1)}%",
+                        ),
+                      ],
                       // _smallChip("Available", item.availableQty.toStringAsFixed(2)),
                       // if (item.batchNo.isNotEmpty) _smallChip("Batch", item.batchNo),
                     ],
@@ -894,7 +1026,13 @@ else ...[
                         style: TextStyle(fontWeight: FontWeight.w500),
                       ),
                       //  _summaryRow("Grand Total", getGrandTotal(), isBold: true),
-                     Text("₹${item.totalAmount.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(
+                        "₹${item.totalAmount.toStringAsFixed(2)}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                     ],
                   ),
                 ),

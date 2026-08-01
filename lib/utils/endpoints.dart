@@ -57,4 +57,6 @@ static const String createPurchaseApprovalRequest = "/create-purchase-approval-r
   static const String getSaleItemsById = "/get-sales-item"; // + /$saleId/items
   static const String getSalesBillReferences = "/sales-bill-references";
   static const String getSalesReturnLedgers = "/sales-ledger-dropdown";
+
+  static const String getLedgerOverdueStatus = "/sales/ledger-overdue-status";
 }

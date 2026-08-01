@@ -1175,6 +1175,7 @@ class ApiService {
         "consignee_contact_no": consigneeContactNo ?? "",
         "consignee_address": consigneeAddress ?? "",
         "consignee_gstn_no": consigneeGstnNo ?? "",
+        "sales_date": DateTime.now().toIso8601String().split("T")[0],
 
         "is_supercash_sale": isSupercash ? 1 : 0,
 
@@ -1186,6 +1187,7 @@ class ApiService {
 
         "items": items.map((e) => e.toJson()).toList(),
       };
+debugPrint("SALES ORDER PAYLOAD sales_date: ${payload['sales_date']}"); // ← add this
 
       payload.forEach((key, value) {
         request.fields[key] = jsonEncode(value);
@@ -1812,4 +1814,33 @@ static Future<Map<String, dynamic>> createCreditNoteApprovalRequest({
     return {"success": false, "message": e.toString()};
   }
 }
+
+static Future<Map<String, dynamic>> checkLedgerOverdueStatus(
+  int ledgerId, {
+  String? salesDate,
+}) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+
+    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+
+    final token = await StorageService.getToken();
+
+    final uri = Uri.parse(
+      "$baseUrl${Endpoints.getLedgerOverdueStatus}/$ledgerId",
+    ).replace(
+      queryParameters: salesDate != null ? {"sales_date": salesDate} : null,
+    );
+
+    final response = await http.get(
+      uri,
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {"success": false, "message": e.toString()};
+  }
 }
+}
+

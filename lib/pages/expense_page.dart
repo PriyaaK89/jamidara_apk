@@ -251,27 +251,42 @@ Future<File?> _stampImage(File file) async {
   }
 }
 
-  Future<void> _pickDate() async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2023),
-      lastDate: DateTime(2100),
-    );
 
-    if (picked != null) {
-      setState(() {
-        selectedDate = picked;
-      });
-    }
+Future<void> _pickDate() async {
+  final DateTime? picked = await showDatePicker(
+    context: context,
+    initialDate: DateTime.now(),
+    firstDate: DateTime(2023),
+    lastDate: DateTime(2100),
+  );
+
+  if (picked == null) return; // user cancelled
+
+  final now = DateTime.now();
+  final bool isSameMonth = picked.year == now.year && picked.month == now.month;
+
+  print("DEBUG picked=$picked isSameMonth=$isSameMonth currentSelectedDate=$selectedDate");
+
+  if (!isSameMonth) {
+    Flushbar(
+      message: "Only current month date is allowed",
+      duration: const Duration(seconds: 2),
+      flushbarPosition: FlushbarPosition.BOTTOM,
+      backgroundColor: Colors.orange,
+      margin: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(8),
+    ).show(context);
+    return; // IMPORTANT: no setState here at all
   }
 
+  setState(() {
+    selectedDate = picked;
+  });
+}
   Future<void> _submit() async {
     if (isLoading) return;
 
-    if (selectedDate == null ||
-        amountController.text.isEmpty ||
-        selectedImage == null) {
+    if (selectedDate == null || amountController.text.isEmpty || selectedImage == null) {
       Flushbar(
         message: "Please fill all fields",
         duration: const Duration(seconds: 2),
@@ -282,6 +297,21 @@ Future<File?> _stampImage(File file) async {
       ).show(context);
       return;
     }
+
+ final now = DateTime.now();
+  final isSameMonth = selectedDate!.year == now.year && selectedDate!.month == now.month;
+  if (!isSameMonth) {
+    Flushbar(
+      message: "Only current month date is allowed",
+      duration: const Duration(seconds: 2),
+      flushbarPosition: FlushbarPosition.BOTTOM,
+      backgroundColor: Colors.orange,
+      margin: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(8),
+    ).show(context);
+    return;
+  }
+
     setState(() {
       isLoading = true;
     });

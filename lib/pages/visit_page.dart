@@ -84,6 +84,7 @@ class _VisitPageState extends State<VisitPage> {
 
    TimeOfDay? loginTime;
   TimeOfDay? visitUpto;
+  
 
   final TextEditingController firmNameController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
@@ -106,6 +107,7 @@ class _VisitPageState extends State<VisitPage> {
   int? selectedCustomerId;
   bool isLoadingCustomers = false;
   bool isImageLoading = false;
+  bool _visitTimingsLoaded = false;
 
   @override
   void dispose() {
@@ -126,7 +128,7 @@ class _VisitPageState extends State<VisitPage> {
 
     Flushbar(
       message: message,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 3),
       flushbarPosition: FlushbarPosition.BOTTOM,
       backgroundColor: isSuccess ? Colors.green : Colors.redAccent,
       margin: const EdgeInsets.all(20),
@@ -161,6 +163,16 @@ class _VisitPageState extends State<VisitPage> {
     selectedArea = null;
     areaList = [];
   }
+
+  DateTime _nowIST() {
+  final nowUtc = DateTime.now().toUtc();
+  return nowUtc.add(const Duration(hours: 5, minutes: 30));
+}
+
+DateTime _todayISTWithTime(TimeOfDay t) {
+  final istNow = _nowIST();
+  return DateTime.utc(istNow.year, istNow.month, istNow.day, t.hour, t.minute);
+}
 
   void _resetForm() {
     setState(() {
@@ -197,17 +209,29 @@ class _VisitPageState extends State<VisitPage> {
      _fetchVisitTimings();
   }
 
-   Future<void> _fetchVisitTimings() async {
-    final profile = await ApiService.getProfile();
+
+Future<void> _fetchVisitTimings() async {
+  try {
+    final profile = await ApiService.getProfile().timeout(
+      const Duration(seconds: 10),
+    );
+    print("PROFILE FETCH -> success: ${profile?["success"]}, visit_upto: ${profile?["data"]?["visit_upto"]}");
+
     if (profile != null && profile["success"] == true) {
       final data = profile["data"];
-      setState(() {
-        loginTime = _parseTimeOfDay(data["login_time"]);   // e.g. "10:00:00"
-        visitUpto = _parseTimeOfDay(data["visit_upto"]);   // e.g. "19:30:00"
-      });
+      if (mounted) {
+        setState(() {
+          loginTime = _parseTimeOfDay(data["login_time"]);
+          visitUpto = _parseTimeOfDay(data["visit_upto"]);
+          _visitTimingsLoaded = true;
+        });
+      }
     }
+  } catch (e) {
+    print("PROFILE FETCH FAILED: $e");
+    // leave _visitTimingsLoaded = false so submit retries
   }
-
+}
    TimeOfDay? _parseTimeOfDay(String? time) {
     if (time == null || !time.contains(":")) return null;
     final parts = time.split(":");
@@ -659,14 +683,30 @@ class _VisitPageState extends State<VisitPage> {
   }
 
 Future<void> _submitForm() async {
-  final now = DateTime.now();
+   // since there's no backend enforcement as a fallback.
+  if (!_visitTimingsLoaded) {
+    await _fetchVisitTimings();
+  }
 
-  if (visitUpto != null && now.isAfter(_todayWithTime(visitUpto!))) {
-    _showFlushbar(
-      "Visit submission time is over (allowed till ${visitUpto!.format(context)})",
-    );
+  if (!_visitTimingsLoaded) {
+    _showFlushbar("Unable to verify visit time. Please check your connection and try again.");
     return;
   }
+
+  if (visitUpto != null) {
+    final deadline = _todayISTWithTime(visitUpto!);
+    final now = _nowIST();
+
+    print("SUBMIT TIME CHECK -> nowIST: $now | deadlineIST: $deadline | blocked: ${now.isAfter(deadline)}");
+
+    if (now.isAfter(deadline)) {
+      _showFlushbar(
+        "Visit submission time is over (allowed till ${visitUpto!.format(context)})",
+      );
+      return;
+    }
+  }
+
   if (attendanceType == null) {
     _showFlushbar("Please select attendance type");
     return;
@@ -724,14 +764,14 @@ Future<void> _submitForm() async {
       await prefs.remove("last_notify_time");
       final token = prefs.getString("token") ?? "";
 
-      final visitRes = await ApiService.getTodayVisitCount(token);
-      if (visitRes["success"] == true) {
-        int visits = visitRes["totalVisits"] ?? visitRes["visits"] ?? 0;
-        if (visits < 4) {
-          await Future.delayed(const Duration(seconds: 1));
-          await showVisitReminderDialog(visits);
-        }
-      }
+      // final visitRes = await ApiService.getTodayVisitCount(token);
+      // if (visitRes["success"] == true) {
+      //   int visits = visitRes["totalVisits"] ?? visitRes["visits"] ?? 0;
+      //   if (visits < 4) {
+      //     await Future.delayed(const Duration(seconds: 1));
+      //     await showVisitReminderDialog(visits);
+      //   }
+      // }
     } else {
       _showFlushbar(_friendlyErrorMessage(message));
     }

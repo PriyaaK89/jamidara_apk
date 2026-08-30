@@ -59,4 +59,5 @@ static const String createPurchaseApprovalRequest = "/create-purchase-approval-r
   static const String getSalesReturnLedgers = "/sales-ledger-dropdown";
 
   static const String getLedgerOverdueStatus = "/sales/ledger-overdue-status";
+  static const String getTeamTargets = '/get-teamwise-visit-target-template';
 }

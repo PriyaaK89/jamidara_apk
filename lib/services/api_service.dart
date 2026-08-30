@@ -1163,7 +1163,10 @@ class ApiService {
       final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
       final token = await StorageService.getToken();
 
-      var request = http.MultipartRequest( "POST", Uri.parse("$baseUrl${Endpoints.createSalesApprovalRequest}"),);
+      var request = http.MultipartRequest(
+        "POST",
+        Uri.parse("$baseUrl${Endpoints.createSalesApprovalRequest}"),
+      );
 
       request.headers.addAll({"Authorization": "Bearer $token"});
 
@@ -1187,7 +1190,9 @@ class ApiService {
 
         "items": items.map((e) => e.toJson()).toList(),
       };
-debugPrint("SALES ORDER PAYLOAD sales_date: ${payload['sales_date']}"); // ← add this
+      debugPrint(
+        "SALES ORDER PAYLOAD sales_date: ${payload['sales_date']}",
+      ); // ← add this
 
       payload.forEach((key, value) {
         request.fields[key] = jsonEncode(value);
@@ -1251,109 +1256,110 @@ debugPrint("SALES ORDER PAYLOAD sales_date: ${payload['sales_date']}"); // ← a
   }
 
   static Future<List<dynamic>> getMyAssignedLedgers() async {
-  try {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+      final token = await StorageService.getToken();
+      final response = await http.get(
+        Uri.parse("$baseUrl${Endpoints.getMyAssignedLedgers}"),
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      final json = jsonDecode(response.body);
+
+      if (json["success"] == true) {
+        return json["data"] ?? [];
+      }
+
+      return [];
+    } catch (e) {
+      debugPrint(e.toString());
+      return [];
+    }
+  }
+
+  /// Current active target + progress breakdown for one employee
+  static Future<Map<String, dynamic>> getEmployeeVisitProgress(
+    String token,
+    int employeeId,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
-    final token = await StorageService.getToken();
-    final response = await http.get( Uri.parse( "$baseUrl${Endpoints.getMyAssignedLedgers}", ),
-      headers: { "Authorization": "Bearer $token", },
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    final url = Uri.parse(
+      '$baseUrl${Endpoints.getEmployeeVisitProgress}/$employeeId',
     );
 
-    final json = jsonDecode(response.body);
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
 
-    if (json["success"] == true) {
-      return json["data"] ?? [];
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return responseData;
+      } else {
+        return {
+          "success": false,
+          "message": responseData['message'] ?? 'Failed to fetch progress',
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "Exception occurred: $e"};
     }
-
-    return [];
-  } catch (e) {
-    debugPrint(e.toString());
-    return [];
   }
-}
 
-/// Current active target + progress breakdown for one employee
-static Future<Map<String, dynamic>> getEmployeeVisitProgress(
-  String token,
-  int employeeId,
-) async {
-  final prefs = await SharedPreferences.getInstance();
-  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
-  final url = Uri.parse(
-    '$baseUrl${Endpoints.getEmployeeVisitProgress}/$employeeId',
-  );
+  /// Past (COMPLETED/EXPIRED) periods for one employee
+  static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
+    String token,
+    int employeeId, {
+    String? status,
+    int page = 1,
+    int limit = 10,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
 
-  try {
-    final response = await http.get(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
+    final queryParams = {
+      'employee_id': employeeId.toString(),
+      'page': page.toString(),
+      'limit': limit.toString(),
+      if (status != null) 'status': status,
+    };
 
-    final responseData = jsonDecode(response.body);
+    final url = Uri.parse(
+      '$baseUrl${Endpoints.getVisitTargetHistory}',
+    ).replace(queryParameters: queryParams);
 
-    if (response.statusCode == 200) {
-      return responseData;
-    } else {
-      return {
-        "success": false,
-        "message": responseData['message'] ?? 'Failed to fetch progress',
-      };
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return responseData;
+      } else {
+        return {
+          "success": false,
+          "message": responseData['message'] ?? 'Failed to fetch history',
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "Exception occurred: $e"};
     }
-  } catch (e) {
-    return {"success": false, "message": "Exception occurred: $e"};
   }
-}
 
-/// Past (COMPLETED/EXPIRED) periods for one employee
-static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
-  String token,
-  int employeeId, {
-  String? status,
-  int page = 1,
-  int limit = 10,
-}) async {
-  final prefs = await SharedPreferences.getInstance();
-  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
-
-  final queryParams = {
-    'employee_id': employeeId.toString(),
-    'page': page.toString(),
-    'limit': limit.toString(),
-    if (status != null) 'status': status,
-  };
-
-  final url = Uri.parse(
-    '$baseUrl${Endpoints.getVisitTargetHistory}',
-  ).replace(queryParameters: queryParams);
-
-  try {
-    final response = await http.get(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    final responseData = jsonDecode(response.body);
-
-    if (response.statusCode == 200) {
-      return responseData;
-    } else {
-      return {
-        "success": false,
-        "message": responseData['message'] ?? 'Failed to fetch history',
-      };
-    }
-  } catch (e) {
-    return {"success": false, "message": "Exception occurred: $e"};
-  }
-}
-
-// Get Notifications
+  // Get Notifications
   static Future<Map<String, dynamic>> getNotifications(
     String token, {
     String? moduleType,
@@ -1370,15 +1376,17 @@ static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
       queryParams['notification_category'] = notificationCategory;
     }
 
-    final url = Uri.parse('$baseUrl${Endpoints.getNotification}')
-        .replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+    final url = Uri.parse(
+      '$baseUrl${Endpoints.getNotification}',
+    ).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
 
     try {
       final response = await http.get(
         url,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token', // adjust if your other calls use a different scheme
+          'Authorization':
+              'Bearer $token', // adjust if your other calls use a different scheme
         },
       );
 
@@ -1398,7 +1406,9 @@ static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
   }
 
   // Get Notification Counts
-  static Future<Map<String, dynamic>> getNotificationCounts(String token) async {
+  static Future<Map<String, dynamic>> getNotificationCounts(
+    String token,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
     final url = Uri.parse('$baseUrl${Endpoints.getNotificationsCount}');
@@ -1419,7 +1429,8 @@ static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
       } else {
         return {
           "success": false,
-          "message": responseData['message'] ?? 'Failed to fetch notification counts',
+          "message":
+              responseData['message'] ?? 'Failed to fetch notification counts',
         };
       }
     } catch (e) {
@@ -1457,7 +1468,8 @@ static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
       } else {
         return {
           "success": false,
-          "message": responseData['message'] ?? 'Failed to mark notification read',
+          "message":
+              responseData['message'] ?? 'Failed to mark notification read',
         };
       }
     } catch (e) {
@@ -1467,96 +1479,107 @@ static Future<Map<String, dynamic>> getEmployeeVisitTargetHistory(
 
   // ── Receipt Approval Request: dropdowns ──────────────────────────────
 
-static Future<Map<String, dynamic>> getBankAccountLedgerDropdown() async {
-  final prefs = await SharedPreferences.getInstance();
-  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
-  final token = await StorageService.getToken();
-  final url = Uri.parse('$baseUrl${Endpoints.getBankAccountLedgerDropdown}');
+  static Future<Map<String, dynamic>> getBankAccountLedgerDropdown() async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    final token = await StorageService.getToken();
+    final url = Uri.parse('$baseUrl${Endpoints.getBankAccountLedgerDropdown}');
 
-  try {
-    final response = await http.get(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {"success": false, "message": "Exception occurred: $e"};
-  }
-}
-
-static Future<Map<String, dynamic>> getLedgerDetailsById(String ledgerId) async {
-  final prefs = await SharedPreferences.getInstance();
-  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
-  final token = await StorageService.getToken();
-  final url = Uri.parse('$baseUrl${Endpoints.getLedgerDetailsByID}/$ledgerId');
-
-  try {
-    final response = await http.get(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {"success": false, "message": "Exception occurred: $e"};
-  }
-}
-
-// ── Receipt Approval Request: submit ─────────────────────────────────
-
-static Future<Map<String, dynamic>> createReceiptApprovalRequest({
-  required String accountLedgerId,
-  required String receiptDate,
-  String? employeeUnderId,
-  required String narration,
-  required double totalAmount,
-  required List<Map<String, dynamic>> entries,
-  required File attachment,
-}) async {
-  final prefs = await SharedPreferences.getInstance();
-  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
-  final token = await StorageService.getToken();
-  final url = Uri.parse('$baseUrl${Endpoints.createReceiptRequest}');
-
-  try {
-    final request = http.MultipartRequest('POST', url);
-    request.headers['Authorization'] = 'Bearer $token';
-
-    request.fields['account_ledger_id'] = accountLedgerId;
-    request.fields['receipt_date'] = receiptDate;
-    request.fields['narration'] = narration;
-    request.fields['total_amount'] = totalAmount.toString();
-    if (employeeUnderId != null && employeeUnderId.isNotEmpty) {
-      request.fields['employee_under_id'] = employeeUnderId;
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {"success": false, "message": "Exception occurred: $e"};
     }
-    request.fields['entries'] = jsonEncode(entries);
+  }
 
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'attachment',
-        attachment.path,
-        contentType: MediaType('image', 'jpeg'),
-      ),
+  static Future<Map<String, dynamic>> getLedgerDetailsById(
+    String ledgerId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    final token = await StorageService.getToken();
+    final url = Uri.parse(
+      '$baseUrl${Endpoints.getLedgerDetailsByID}/$ledgerId',
     );
 
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {"success": false, "message": "Exception occurred: $e"};
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {"success": false, "message": "Exception occurred: $e"};
+    }
   }
-}
 
-static Future<Map<String, dynamic>> createPurchaseApprovalRequest({
+  // ── Receipt Approval Request: submit ─────────────────────────────────
+
+  static Future<Map<String, dynamic>> createReceiptApprovalRequest({
+    required String accountLedgerId,
+    required String receiptDate,
+    String? employeeUnderId,
+    required String narration,
+    required double totalAmount,
+    required List<Map<String, dynamic>> entries,
+    required File attachment,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+    final token = await StorageService.getToken();
+    final url = Uri.parse('$baseUrl${Endpoints.createReceiptRequest}');
+
+    try {
+      final request = http.MultipartRequest('POST', url);
+      request.headers['Authorization'] = 'Bearer $token';
+
+      request.fields['account_ledger_id'] = accountLedgerId;
+      request.fields['receipt_date'] = receiptDate;
+      request.fields['narration'] = narration;
+      request.fields['total_amount'] = totalAmount.toString();
+      if (employeeUnderId != null && employeeUnderId.isNotEmpty) {
+        request.fields['employee_under_id'] = employeeUnderId;
+      }
+      request.fields['entries'] = jsonEncode(entries);
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'attachment',
+          attachment.path,
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
+
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {"success": false, "message": "Exception occurred: $e"};
+    }
+  }
+
+  static Future<Map<String, dynamic>> createPurchaseApprovalRequest({
     required int supplierLedgerId,
-    required int purchaseLedgerId,
+    // required int purchaseLedgerId,
     required String supplierInvoiceNo,
     required String narration,
+
+    bool isConsignee = false,
+    String? dealerName,
+    String? proprietorName,
+    String? consigneeContactNo,
+    String? consigneeAddress,
+    String? consigneeGstnNo,
 
     required double subtotal,
     required double igstTotal,
@@ -1583,8 +1606,15 @@ static Future<Map<String, dynamic>> createPurchaseApprovalRequest({
 
       final payload = {
         "supplier_ledger_id": supplierLedgerId,
-        "purchase_ledger_id": purchaseLedgerId,
+        // "purchase_ledger_id": purchaseLedgerId,
         "supplier_invoice_no": supplierInvoiceNo,
+
+        "is_consignee": isConsignee,
+        "dealer_name": dealerName,
+        "proprietor_name": proprietorName,
+        "consignee_contact_no": consigneeContactNo,
+        "consignee_address": consigneeAddress,
+        "consignee_gstn_no": consigneeGstnNo,
 
         "subtotal": subtotal,
         "igst_total": igstTotal,
@@ -1592,7 +1622,6 @@ static Future<Map<String, dynamic>> createPurchaseApprovalRequest({
         "sgst_total": sgstTotal,
         "total_amount": totalAmount,
         "tax_mode": taxMode,
-
         "narration": narration,
 
         "items": items.map((e) => e.toJson()).toList(),
@@ -1619,228 +1648,305 @@ static Future<Map<String, dynamic>> createPurchaseApprovalRequest({
   }
 
   // ── Credit Note: Party sales history (Option A) ─────────────────────────
-static Future<List<dynamic>> getSalesByCustomer(int customerLedgerId) async {
-  try {
+  static Future<List<dynamic>> getSalesByCustomer(int customerLedgerId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+      final token = await StorageService.getToken();
+
+      final url = Uri.parse(
+        "$baseUrl${Endpoints.getSalesByCustomer}?customer_ledger_id=$customerLedgerId",
+      );
+
+      final response = await http.get(
+        url,
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      final data = jsonDecode(response.body);
+      if (data["success"] == true) {
+        return data["data"] ?? [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint("getSalesByCustomer error: $e");
+      return [];
+    }
+  }
+
+  static Future<List<dynamic>> getSaleItemsById(int saleId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+      final token = await StorageService.getToken();
+
+      final url = Uri.parse(
+        "$baseUrl${Endpoints.getSaleItemsById}/$saleId/items",
+      );
+
+      final response = await http.get(
+        url,
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      final data = jsonDecode(response.body);
+      if (data["success"] == true) {
+        return data["data"] ?? [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint("getSaleItemsById error: $e");
+      return [];
+    }
+  }
+
+  static Future<List<dynamic>> getSalesBillReferences(int saleId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+      final token = await StorageService.getToken();
+
+      final url = Uri.parse(
+        "$baseUrl${Endpoints.getSalesBillReferences}?sale_id=$saleId",
+      );
+
+      final response = await http.get(
+        url,
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      final data = jsonDecode(response.body);
+      if (data["success"] == true) {
+        return data["data"] ?? [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint("getSalesBillReferences error: $e");
+      return [];
+    }
+  }
+
+  // ── Sales Return ledger dropdown ─────────────────────────────────────────
+  static Future<List<dynamic>> getSalesReturnLedgers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+      final token = await StorageService.getToken();
+
+      final url = Uri.parse("$baseUrl${Endpoints.getSalesReturnLedgers}");
+
+      final response = await http.get(
+        url,
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      final data = jsonDecode(response.body);
+      if (data["success"] == true) {
+        return data["data"] ?? [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint("getSalesReturnLedgers error: $e");
+      return [];
+    }
+  }
+
+  // ── Submit Credit Note Approval Request ──────────────────────────────────
+  static Future<Map<String, dynamic>> createCreditNoteApprovalRequest({
+    required int customerLedgerId,
+    required String creditNoteDate,
+    int? originalSaleId, // null in manual mode
+    required int salesReturnLedgerId,
+    required bool isConsignee,
+    String? dealerName,
+    String? proprietorName,
+    String? consigneeContactNo,
+    String? consigneeAddress,
+    String? consigneeGstnNo,
+
+    required double subtotal,
+    required double igstTotal,
+    required double cgstTotal,
+    required double sgstTotal,
+    required double taxTotal,
+    required double totalAmount,
+
+    required String narration,
+    required List<CreditNoteItem> items,
+    required List<Map<String, dynamic>> billReferences,
+
+    File? billTImage,
+    File? dispatchDocImage,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+      final token = await StorageService.getToken();
+      final creatorId = await StorageService.getEmployeeId();
+
+      var request = http.MultipartRequest(
+        "POST",
+        Uri.parse("$baseUrl${Endpoints.createCreditNoteApprovalRequest}"),
+      );
+
+      request.headers.addAll({"Authorization": "Bearer $token"});
+
+      final payload = {
+        "customer_ledger_id": customerLedgerId,
+        "credit_note_date": creditNoteDate,
+        "original_sale_id": originalSaleId,
+        "sales_return_ledger_id": salesReturnLedgerId,
+        "is_consignee": isConsignee,
+        "employee_under_id": creatorId,
+        "dealer_name": dealerName ?? "",
+        "proprietor_name": proprietorName ?? "",
+        "consignee_contact_no": consigneeContactNo ?? "",
+        "consignee_address": consigneeAddress ?? "",
+        "consignee_gstn_no": consigneeGstnNo ?? "",
+
+        "subtotal": subtotal,
+        "igst_total": igstTotal,
+        "cgst_total": cgstTotal,
+        "sgst_total": sgstTotal,
+        "tax_total": taxTotal,
+        "total_amount": totalAmount,
+        "narration": narration,
+
+        "items": items.map((e) => e.toJson()).toList(),
+        "bill_references": billReferences,
+      };
+
+      payload.forEach((key, value) {
+        request.fields[key] = jsonEncode(value);
+      });
+
+      if (billTImage != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath("bill_t_image", billTImage.path),
+        );
+      }
+
+      if (dispatchDocImage != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            "dispatch_doc_image",
+            dispatchDocImage.path,
+          ),
+        );
+      }
+
+      final response = await request.send();
+      final body = await response.stream.bytesToString();
+
+      return jsonDecode(body);
+    } catch (e) {
+      return {"success": false, "message": e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> checkLedgerOverdueStatus(
+    int ledgerId, {
+    String? salesDate,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
+
+      final token = await StorageService.getToken();
+
+      final uri =
+          Uri.parse(
+            "$baseUrl${Endpoints.getLedgerOverdueStatus}/$ledgerId",
+          ).replace(
+            queryParameters: salesDate != null
+                ? {"sales_date": salesDate}
+                : null,
+          );
+
+      final response = await http.get(
+        uri,
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {"success": false, "message": e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getTeamTargets({
+    required String token,
+    int? level,
+    int? userId,
+    int? templateId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
-    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
-    final token = await StorageService.getToken();
+    final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+    final params = <String, String>{};
+    if (level != null) params['level'] = level.toString();
+    if (userId != null) params['user_id'] = userId.toString();
+    if (templateId != null) params['template_id'] = templateId.toString();
 
     final url = Uri.parse(
-      "$baseUrl${Endpoints.getSalesByCustomer}?customer_ledger_id=$customerLedgerId",
-    );
+      '$baseUrl${Endpoints.getTeamTargets}',
+    ).replace(queryParameters: params);
 
-    final response = await http.get(
-      url,
-      headers: {"Authorization": "Bearer $token"},
-    );
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-    final data = jsonDecode(response.body);
-    if (data["success"] == true) {
-      return data["data"] ?? [];
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return data;
+      } else {
+        return {
+          "success": false,
+          "message": data['message'] ?? 'Failed to load team targets',
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": e.toString()};
     }
-    return [];
-  } catch (e) {
-    debugPrint("getSalesByCustomer error: $e");
-    return [];
   }
-}
 
-static Future<List<dynamic>> getSaleItemsById(int saleId) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
-    final token = await StorageService.getToken();
-
-    final url = Uri.parse(
-      "$baseUrl${Endpoints.getSaleItemsById}/$saleId/items",
-    );
-
-    final response = await http.get(
-      url,
-      headers: {"Authorization": "Bearer $token"},
-    );
-
-    final data = jsonDecode(response.body);
-    if (data["success"] == true) {
-      return data["data"] ?? [];
-    }
-    return [];
-  } catch (e) {
-    debugPrint("getSaleItemsById error: $e");
-    return [];
-  }
-}
-
-static Future<List<dynamic>> getSalesBillReferences(int saleId) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
-    final token = await StorageService.getToken();
-
-    final url = Uri.parse(
-      "$baseUrl${Endpoints.getSalesBillReferences}?sale_id=$saleId",
-    );
-
-    final response = await http.get(
-      url,
-      headers: {"Authorization": "Bearer $token"},
-    );
-
-    final data = jsonDecode(response.body);
-    if (data["success"] == true) {
-      return data["data"] ?? [];
-    }
-    return [];
-  } catch (e) {
-    debugPrint("getSalesBillReferences error: $e");
-    return [];
-  }
-}
-
-// ── Sales Return ledger dropdown ─────────────────────────────────────────
-static Future<List<dynamic>> getSalesReturnLedgers() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
-    final token = await StorageService.getToken();
-
-    final url = Uri.parse("$baseUrl${Endpoints.getSalesReturnLedgers}");
-
-    final response = await http.get(
-      url,
-      headers: {"Authorization": "Bearer $token"},
-    );
-
-    final data = jsonDecode(response.body);
-    if (data["success"] == true) {
-      return data["data"] ?? [];
-    }
-    return [];
-  } catch (e) {
-    debugPrint("getSalesReturnLedgers error: $e");
-    return [];
-  }
-}
-
-// ── Submit Credit Note Approval Request ──────────────────────────────────
-static Future<Map<String, dynamic>> createCreditNoteApprovalRequest({
-  required int customerLedgerId,
-  required String creditNoteDate,
-  int? originalSaleId, // null in manual mode
-  required int salesReturnLedgerId,
-  required bool isConsignee,
-  String? dealerName,
-  String? proprietorName,
-  String? consigneeContactNo,
-  String? consigneeAddress,
-  String? consigneeGstnNo,
-
-  required double subtotal,
-  required double igstTotal,
-  required double cgstTotal,
-  required double sgstTotal,
-  required double taxTotal,
-  required double totalAmount,
-
-  required String narration,
-  required List<CreditNoteItem> items,
-  required List<Map<String, dynamic>> billReferences,
-
-  File? billTImage,
-  File? dispatchDocImage,
+  static Future<Map<String, dynamic>> getEmployeeTargetProgress({
+  required String token,
+  required int employeeId,
 }) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
-    final token = await StorageService.getToken();
-    final creatorId = await StorageService.getEmployeeId();
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+  final url = Uri.parse('$baseUrl${Endpoints.getTeamTargets}')
+      .replace(queryParameters: {'user_id': employeeId.toString()});
 
-    var request = http.MultipartRequest(
-      "POST",
-      Uri.parse("$baseUrl${Endpoints.createCreditNoteApprovalRequest}"),
+  debugPrint('getEmployeeTargetProgress → $url');
+
+  try {
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
     );
 
-    request.headers.addAll({"Authorization": "Bearer $token"});
+    final data = jsonDecode(response.body);
+    debugPrint('RAW target progress response: ${response.statusCode} → $data');
 
-    final payload = {
-      "customer_ledger_id": customerLedgerId,
-      "credit_note_date": creditNoteDate,
-      "original_sale_id": originalSaleId,
-      "sales_return_ledger_id": salesReturnLedgerId,
-      "is_consignee": isConsignee,
-      "employee_under_id": creatorId,
-      "dealer_name": dealerName ?? "",
-      "proprietor_name": proprietorName ?? "",
-      "consignee_contact_no": consigneeContactNo ?? "",
-      "consignee_address": consigneeAddress ?? "",
-      "consignee_gstn_no": consigneeGstnNo ?? "",
-
-      "subtotal": subtotal,
-      "igst_total": igstTotal,
-      "cgst_total": cgstTotal,
-      "sgst_total": sgstTotal,
-      "tax_total": taxTotal,
-      "total_amount": totalAmount,
-      "narration": narration,
-
-      "items": items.map((e) => e.toJson()).toList(),
-      "bill_references": billReferences,
-    };
-
-    payload.forEach((key, value) {
-      request.fields[key] = jsonEncode(value);
-    });
-
-    if (billTImage != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath("bill_t_image", billTImage.path),
-      );
+    if (response.statusCode == 200) {
+      return data;
+    } else {
+      return {"success": false, "message": data['message'] ?? 'Failed to load target progress'};
     }
-
-    if (dispatchDocImage != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          "dispatch_doc_image",
-          dispatchDocImage.path,
-        ),
-      );
-    }
-
-    final response = await request.send();
-    final body = await response.stream.bytesToString();
-
-    return jsonDecode(body);
   } catch (e) {
     return {"success": false, "message": e.toString()};
   }
 }
-
-static Future<Map<String, dynamic>> checkLedgerOverdueStatus(
-  int ledgerId, {
-  String? salesDate,
-}) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-
-    final baseUrl = prefs.getString("FLUTTER_BASE_URL") ?? "";
-
-    final token = await StorageService.getToken();
-
-    final uri = Uri.parse(
-      "$baseUrl${Endpoints.getLedgerOverdueStatus}/$ledgerId",
-    ).replace(
-      queryParameters: salesDate != null ? {"sales_date": salesDate} : null,
-    );
-
-    final response = await http.get(
-      uri,
-      headers: {"Authorization": "Bearer $token"},
-    );
-
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {"success": false, "message": e.toString()};
-  }
 }
-}
-

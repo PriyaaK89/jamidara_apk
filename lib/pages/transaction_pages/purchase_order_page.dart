@@ -15,12 +15,20 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   final TextEditingController narrationController = TextEditingController();
   final TextEditingController supplierInvoiceController = TextEditingController();
 
+  // ---- Consignee controllers (same pattern as Sales Order page) ----
+  bool isConsignee = false;
+  final dealerController = TextEditingController();
+  final proprietorController = TextEditingController();
+  final consigneeContactController = TextEditingController();
+  final consigneeAddressController = TextEditingController();
+  final consigneeGstController = TextEditingController();
+
   List<dynamic> supplierLedgers = [];
   List<dynamic> purchaseLedgers = [];
   List<dynamic> stockItems = [];
 
   Map<String, dynamic>? selectedSupplierLedger;
-  Map<String, dynamic>? selectedPurchaseLedger;
+  // Map<String, dynamic>? selectedPurchaseLedger;
 
   bool isLoadingInitial = true;
   bool isSubmitting = false;
@@ -29,6 +37,35 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   final ImagePicker picker = ImagePicker();
 
   List<PurchaseItem> purchaseItems = [PurchaseItem()];
+
+  // Rate field controllers, one per row, keyed by PurchaseItem.uid so we can
+  // programmatically set the text when an item is selected (auto-fill) while
+  // still letting the user edit it manually afterwards.
+  final Map<String, TextEditingController> rateControllers = {};
+
+  TextEditingController _rateControllerFor(PurchaseItem item) {
+    return rateControllers.putIfAbsent(
+      item.uid,
+      () => TextEditingController(text: item.rate == 0 ? "" : _trimZeros(item.rate)),
+    );
+  }
+
+  void _setRateControllerText(PurchaseItem item, double rate) {
+    final controller = _rateControllerFor(item);
+    controller.text = rate == 0 ? "" : _trimZeros(rate);
+    controller.selection = TextSelection.collapsed(offset: controller.text.length);
+  }
+
+  String _trimZeros(double value) {
+    if (value == value.roundToDouble()) return value.toStringAsFixed(0);
+    return value.toStringAsFixed(2);
+  }
+
+  // ---------------- Per-item tax amounts ----------------
+
+  double _itemCgstAmount(PurchaseItem item) => item.amount * item.cgstPercent / 100;
+  double _itemSgstAmount(PurchaseItem item) => item.amount * item.sgstPercent / 100;
+  double _itemIgstAmount(PurchaseItem item) => item.amount * item.igstPercent / 100;
 
   @override
   void initState() {
@@ -40,6 +77,14 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   void dispose() {
     narrationController.dispose();
     supplierInvoiceController.dispose();
+    dealerController.dispose();
+    proprietorController.dispose();
+    consigneeContactController.dispose();
+    consigneeAddressController.dispose();
+    consigneeGstController.dispose();
+    for (final c in rateControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -113,6 +158,61 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
     );
   }
 
+  // ---------------- Consignee dialog (mirrors Sales Order page) ----------------
+
+  void showConsigneeDialog() {
+    FocusScope.of(context).requestFocus(FocusNode());
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Text("Consignee Details"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: dealerController,
+                  decoration: const InputDecoration(labelText: "Dealer Name"),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: proprietorController,
+                  decoration: const InputDecoration(labelText: "Proprietor Name"),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: consigneeContactController,
+                  decoration: const InputDecoration(labelText: "Contact"),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: consigneeAddressController,
+                  decoration: const InputDecoration(labelText: "Address"),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: consigneeGstController,
+                  decoration: const InputDecoration(labelText: "GST Number"),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Save"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // ---------------- Item rows ----------------
 
   void addItemRow() {
@@ -121,6 +221,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
 
   void removeItemRow(int index) {
     if (purchaseItems.length == 1) return;
+    final removed = purchaseItems[index];
+    rateControllers.remove(removed.uid)?.dispose();
     setState(() => purchaseItems.removeAt(index));
   }
 
@@ -166,8 +268,10 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       item.cgstPercent = 0;
       item.sgstPercent = 0;
       item.igstPercent = 0;
+      item.rate = 0;
       item.amount = 0;
       item.totalAmount = 0;
+      _setRateControllerText(item, 0);
     });
   }
 
@@ -176,9 +280,8 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
     return double.tryParse(value.toString()) ?? 0;
   }
 
-  // NOTE: assuming a purchase-side item lookup exists (cost-side GST/unit info).
-  // If it's the same endpoint as getStockItemById, this is fine as-is; if purchase
-  // pricing/GST comes from a different response shape, tell me and I'll adjust.
+  // Purchase rate/GST comes from the same getStockItemById response as Sales,
+  // read off opening_stock.rate — matches the sample response you shared.
   Future<void> onItemSelected(int itemId, PurchaseItem row) async {
     try {
       final response = await ApiService.getStockItemById(itemId);
@@ -189,6 +292,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       }
 
       final data = response["data"] as Map<String, dynamic>;
+      final openingStock = data["opening_stock"] as Map<String, dynamic>?;
       final gstDetails = data["gst_details"] as Map<String, dynamic>?;
 
       row.stockItemId = data["id"];
@@ -196,16 +300,26 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       row.unitId = data["unit_id"];
       row.unitName = data["base_unit_name"] ?? "";
 
+      // Auto-fill rate from opening stock, still editable by the user below.
+      row.rate = _toDouble(openingStock?["rate"]);
+
       row.cgstPercent = _toDouble(gstDetails?["central_tax"]);
       row.sgstPercent = _toDouble(gstDetails?["state_tax"]);
       row.igstPercent = _toDouble(gstDetails?["integrated_tax"]);
       _applyGstSelection(row);
       _recalculateItem(row);
+      debugPrint(
+  "item=${row.itemName} rate=${row.rate} cgst=${row.cgstPercent} "
+  "sgst=${row.sgstPercent} igst=${row.igstPercent} amount=${row.amount}",
+);
 
-      if (mounted) setState(() {});
-    } catch (e) {
-      _showSnack("Error loading item details: $e");
-    }
+      if (mounted) {
+        setState(() => _setRateControllerText(row, row.rate));
+      }
+    }  catch (e) {
+  debugPrint("onItemSelected EXCEPTION: $e");
+  _showSnack("Error loading item details: $e");
+}
   }
 
   // ---------------- Totals ----------------
@@ -234,13 +348,23 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   // ---------------- Submit ----------------
 
   void _resetForm() {
+    for (final c in rateControllers.values) {
+      c.dispose();
+    }
+    rateControllers.clear();
     setState(() {
       selectedSupplierLedger = null;
-      selectedPurchaseLedger = null;
+      // selectedPurchaseLedger = null;
       orderBillImage = null;
       purchaseItems = [PurchaseItem()];
       narrationController.clear();
       supplierInvoiceController.clear();
+      isConsignee = false;
+      dealerController.clear();
+      proprietorController.clear();
+      consigneeContactController.clear();
+      consigneeAddressController.clear();
+      consigneeGstController.clear();
     });
   }
 
@@ -250,35 +374,41 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   }
 
   Future<void> submitPurchaseOrder() async {
-    if (selectedSupplierLedger == null) {
-      _showSnack("Please select a supplier");
-      return;
-    }
-    if (selectedPurchaseLedger == null) {
-      _showSnack("Please select a purchase account ledger");
-      return;
-    }
-    if (orderBillImage == null) {
-      _showSnack("Please upload the bill image");
-      return;
-    }
+  if (selectedSupplierLedger == null) {
+    _showSnack("Please select a supplier");
+    return;
+  }
 
-    final validItems = purchaseItems
-        .where((item) => item.stockItemId != null && item.billedQty > 0)
-        .toList();
+  if (orderBillImage == null) {
+    _showSnack("Please upload the bill image");
+    return;
+  }
 
-    if (validItems.isEmpty) {
-      _showSnack("Add at least one item with a quantity");
-      return;
-    }
+  final validItems = purchaseItems
+      .where((item) => item.stockItemId != null && item.billedQty > 0)
+      .toList();
 
-    setState(() => isSubmitting = true);
+  if (validItems.isEmpty) {
+    _showSnack("Add at least one item with a quantity");
+    return;
+  }
+
+  setState(() => isSubmitting = true);
+
+  try {
+    debugPrint("SUBMIT: about to call API");
 
     final response = await ApiService.createPurchaseApprovalRequest(
       supplierLedgerId: selectedSupplierLedger!["id"],
-      purchaseLedgerId: selectedPurchaseLedger!["id"],
+      // purchaseLedgerId: selectedPurchaseLedger!["id"],
       supplierInvoiceNo: supplierInvoiceController.text.trim(),
       narration: narrationController.text.trim(),
+      isConsignee: isConsignee,
+      dealerName: isConsignee ? dealerController.text.trim() : null,
+      proprietorName: isConsignee ? proprietorController.text.trim() : null,
+      consigneeContactNo: isConsignee ? consigneeContactController.text.trim() : null,
+      consigneeAddress: isConsignee ? consigneeAddressController.text.trim() : null,
+      consigneeGstnNo: isConsignee ? consigneeGstController.text.trim() : null,
       subtotal: getSubTotal(),
       igstTotal: getIgstTotal(),
       cgstTotal: getCgstTotal(),
@@ -289,8 +419,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
       orderBillImage: orderBillImage!,
     );
 
+    debugPrint("SUBMIT: got response = $response");
+
     if (!mounted) return;
-    setState(() => isSubmitting = false);
 
     if (response["success"] == true) {
       _showSnack(response["message"]?.toString() ?? "Purchase order generated successfully");
@@ -304,8 +435,14 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
     } else {
       _showSnack(response["message"]?.toString() ?? "Submission failed");
     }
+  } catch (e, stack) {
+    debugPrint("SUBMIT EXCEPTION: $e");
+    debugPrint("SUBMIT STACK: $stack");
+    if (mounted) _showSnack("Error: $e");
+  } finally {
+    if (mounted) setState(() => isSubmitting = false);
   }
-
+}
   // ---------------- UI ----------------
 
   @override
@@ -346,7 +483,9 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                 children: [
                   _buildSupplierSection(),
                   const SizedBox(height: 14),
-                  _buildPurchaseLedgerSection(),
+                  // _buildPurchaseLedgerSection(),
+                  const SizedBox(height: 14),
+                  _buildToggleSection(),
                   const SizedBox(height: 14),
                   const Text("Items", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
@@ -396,13 +535,13 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
               children: const [
                 Icon(Icons.person_search, color: Colors.green, size: 20),
                 SizedBox(width: 8),
-                Text("Supplier", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                Text("Party/Ledger", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               ],
             ),
             const SizedBox(height: 10),
             SearchableField<Map<String, dynamic>>(
-              label: "Select Supplier",
-              hint: "Type to search supplier name",
+              label: "Select Ledger",
+              hint: "Type to search party name",
               icon: Icons.storefront_outlined,
               options: supplierLedgers.cast<Map<String, dynamic>>(),
               displayString: (o) => o["ledger_name"]?.toString() ?? "",
@@ -441,25 +580,50 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
               ],
             ),
             const SizedBox(height: 10),
-            SearchableField<Map<String, dynamic>>(
-              label: "Select Purchase Ledger",
-              hint: "Type to search ledger name",
-              icon: Icons.receipt_long_outlined,
-              options: purchaseLedgers.cast<Map<String, dynamic>>(),
-              displayString: (o) => o["ledger_name"]?.toString() ?? "",
-              filter: (o, query) => (o["ledger_name"] ?? "").toString().toLowerCase().contains(query),
-              showClear: selectedPurchaseLedger != null,
-              onClear: () => setState(() => selectedPurchaseLedger = null),
-              onSelected: (selection) {
-                FocusScope.of(context).unfocus();
-                setState(() => selectedPurchaseLedger = selection);
-              },
-              optionBuilder: (o) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                child: Text(o["ledger_name"]?.toString() ?? "", style: const TextStyle(fontWeight: FontWeight.w500)),
-              ),
-            ),
+            // SearchableField<Map<String, dynamic>>(
+            //   label: "Select Purchase Ledger",
+            //   hint: "Type to search ledger name",
+            //   icon: Icons.receipt_long_outlined,
+            //   options: purchaseLedgers.cast<Map<String, dynamic>>(),
+            //   displayString: (o) => o["ledger_name"]?.toString() ?? "",
+            //   filter: (o, query) => (o["ledger_name"] ?? "").toString().toLowerCase().contains(query),
+            //   showClear: selectedPurchaseLedger != null,
+            //   onClear: () => setState(() => selectedPurchaseLedger = null),
+            //   onSelected: (selection) {
+            //     FocusScope.of(context).unfocus();
+            //     setState(() => selectedPurchaseLedger = selection);
+            //   },
+            //   optionBuilder: (o) => Padding(
+            //     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            //     child: Text(o["ledger_name"]?.toString() ?? "", style: const TextStyle(fontWeight: FontWeight.w500)),
+            //   ),
+            // ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleSection() {
+    return Card(
+      elevation: 1.5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        leading: const Icon(Icons.local_shipping_outlined, size: 18),
+        title: const Text("Is Consignee", style: TextStyle(fontSize: 14)),
+        trailing: Transform.scale(
+          scale: 0.8,
+          child: Switch(
+            activeColor: Colors.green,
+            value: isConsignee,
+            onChanged: (value) {
+              setState(() => isConsignee = value);
+              if (value) {
+                showConsigneeDialog();
+              }
+            },
+          ),
         ),
       ),
     );
@@ -511,12 +675,16 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                   showClear: item.stockItemId != null,
                   onClear: () => clearItemSelection(item),
                   onSelected: (selection) async {
-                    FocusScope.of(context).unfocus();
-                    final id = selection["id"];
-                    if (id is int) {
-                      await onItemSelected(id, item);
-                    }
-                  },
+  FocusScope.of(context).unfocus();
+  debugPrint("SearchableField onSelected fired: $selection");
+  final id = selection["id"];
+  debugPrint("id=$id runtimeType=${id.runtimeType}");
+  if (id is int) {
+    await onItemSelected(id, item);
+  } else {
+    debugPrint("id was NOT an int, skipping onItemSelected");
+  }
+},
                   optionBuilder: (o) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     child: Text(o["item_name"]?.toString() ?? ""),
@@ -530,10 +698,19 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                     children: [
                       _smallChip("Unit", item.unitName),
                       if (item.igstPercent > 0)
-                        _smallChip("IGST", "${item.igstPercent.toStringAsFixed(1)}%")
+                        _smallChip(
+                          "IGST",
+                          "${item.igstPercent.toStringAsFixed(1)}% (₹${_itemIgstAmount(item).toStringAsFixed(2)})",
+                        )
                       else ...[
-                        _smallChip("CGST", "${item.cgstPercent.toStringAsFixed(1)}%"),
-                        _smallChip("SGST", "${item.sgstPercent.toStringAsFixed(1)}%"),
+                        _smallChip(
+                          "CGST",
+                          "${item.cgstPercent.toStringAsFixed(1)}% (₹${_itemCgstAmount(item).toStringAsFixed(2)})",
+                        ),
+                        _smallChip(
+                          "SGST",
+                          "${item.sgstPercent.toStringAsFixed(1)}% (₹${_itemSgstAmount(item).toStringAsFixed(2)})",
+                        ),
                       ],
                     ],
                   ),
@@ -560,6 +737,7 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
                     Expanded(
                       child: TextFormField(
                         key: ValueKey("rate_${item.uid}"),
+                        controller: _rateControllerFor(item),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
                           labelText: "Rate",
@@ -604,14 +782,14 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            TextFormField(
-              controller: supplierInvoiceController,
-              decoration: InputDecoration(
-                labelText: "Supplier Invoice No.",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-            const SizedBox(height: 10),
+            // TextFormField(
+            //   controller: supplierInvoiceController,
+            //   decoration: InputDecoration(
+            //     labelText: "Supplier Invoice No.",
+            //     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            //   ),
+            // ),
+            // const SizedBox(height: 10),
             TextFormField(
               controller: narrationController,
               maxLines: 2,
@@ -685,13 +863,33 @@ class _PurchaseOrderPageState extends State<PurchaseOrderPage> {
   }
 
   Widget _buildSummarySection() {
+    // Subtotal, then the applicable tax line(s) (IGST alone, or CGST + SGST),
+    // then a divider and the bold Grand Total.
+    final taxRows = <Widget>[
+      if (hasIgst)
+        _summaryRow("IGST", getIgstTotal())
+      else ...[
+        _summaryRow("CGST", getCgstTotal()),
+        const SizedBox(height: 8),
+        _summaryRow("SGST", getSgstTotal()),
+      ],
+    ];
+
     return Card(
       elevation: 1.5,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
-          children: [_summaryRow("Grand Total", getGrandTotal(), isBold: true)],
+          children: [
+            _summaryRow("Subtotal", getSubTotal()),
+            const SizedBox(height: 8),
+            ...taxRows,
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            _summaryRow("Grand Total", getGrandTotal(), isBold: true),
+          ],
         ),
       ),
     );

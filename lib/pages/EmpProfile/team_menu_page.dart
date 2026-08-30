@@ -3,6 +3,7 @@ import '../../services/storage_service.dart';
 import '../../layout/app_router.dart';
 import '../EmpProfile/team_visit_report_page.dart';
 import '../EmpProfile/track_team_employees.dart';
+import '../EmpProfile/team_visit_targets_page.dart';
 
 class TeamMenuPage extends StatelessWidget {
   const TeamMenuPage({super.key});
@@ -254,9 +255,9 @@ class TeamMenuPage extends StatelessWidget {
                     ),
                     _buildTile(
                       context: context,
-                      icon: Icons.assignment_ind_rounded,
+                      icon: Icons.people_alt_rounded,
                       title: 'My Team Visit',
-                      subtitle: 'View visits of assigned team members',
+                      subtitle: 'View visits of assigned Team',
                       accentColor: const Color(0xFF00695C),
                       onTap: () async {
                         final level = await StorageService.getJobRoleLevel();
@@ -266,6 +267,24 @@ class TeamMenuPage extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (_) => TeamVisitReportPage(myLevel: level),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildTile(
+                      context: context,
+                      icon: Icons.fact_check_rounded,
+                      title: 'My Team Visit Target',
+                      subtitle: 'View visit target of Team',
+                      accentColor: const Color(0xFF00695C),
+                      onTap: () async {
+                        final level = await StorageService.getJobRoleLevel();
+                        if (!context.mounted) return;
+
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TeamTargetsPage(myLevel: level),
                           ),
                         );
                       },

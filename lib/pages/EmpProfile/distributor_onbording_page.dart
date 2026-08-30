@@ -106,6 +106,33 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
     return null;
   }
 
+  /// Builds a field decoration with a red "*" appended to the label when
+  /// [required] is true. Falls back to the normal AppInputDecoration when
+  /// [required] is false, so non-mandatory fields render unchanged.
+  InputDecoration requiredDecoration(String label, {bool required = true}) {
+    final base = AppInputDecoration.input(label);
+    if (!required) return base;
+
+    return base.copyWith(
+      labelText: null, // labelText and label can't both be set together
+      label: RichText(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(color: Colors.black54, fontSize: 14),
+          children: const [
+            TextSpan(
+              text: ' *',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Dynamic Fields
   List<Map<String, TextEditingController>> partners = [];
   List<Map<String, TextEditingController>> companies = [
@@ -954,7 +981,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                         Expanded(
                           child: TextFormField(
                             controller: responsiblePersonMobile,
-                            decoration: AppInputDecoration.input(
+                            decoration: requiredDecoration(
                               "Responsible Person Mobile",
                             ),
                             validator: (v) => requiredValidator(
@@ -1062,7 +1089,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     TextFormField(
                       controller: responsiblePersonName,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Responsible Person Name",
                       ),
                       validator: (v) => requiredValidator(
@@ -1073,7 +1100,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: responsiblePersonAddress,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Responsible Person Address",
                       ),
                       validator: (v) => requiredValidator(
@@ -1086,7 +1113,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                    
                     TextFormField(
                       controller: responsiblePersonAltMobile,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Responsible Person Alt Mobile",
                       ),
                       validator: (v) => requiredValidator(
@@ -1131,10 +1158,30 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(
-                                      customerDOB.text.isEmpty
-                                          ? "Select Customer DOB"
-                                          : customerDOB.text,
+                                    RichText(
+                                      text: TextSpan(
+                                        text: customerDOB.text.isEmpty
+                                            ? "Select Customer DOB"
+                                            : customerDOB.text,
+                                        style: TextStyle(
+                                          color: customerDOB.text.isEmpty
+                                              ? Colors.black54
+                                              : Colors.black87,
+                                          fontSize: 14,
+                                        ),
+                                        children: customerDOB.text.isEmpty
+                                            ? const [
+                                                TextSpan(
+                                                  text: ' *',
+                                                  style: TextStyle(
+                                                    color: Colors.red,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
                                     ),
                                     const Icon(Icons.calendar_today, size: 18),
                                   ],
@@ -1167,7 +1214,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                         Expanded(
                           child: TextFormField(
                             controller: gstController,
-                            decoration: AppInputDecoration.input(
+                            decoration: requiredDecoration(
                               "Firm GST Number",
                             ),
                             validator: (v) =>
@@ -1216,7 +1263,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     TextFormField(
                       controller: firmsince,
                      readOnly: isGstVerified,
-                      decoration: AppInputDecoration.input("Firm Since (Year)"),
+                      decoration: requiredDecoration("Firm Since (Year)"),
                       validator: (v) =>
                           requiredValidator(v, field: "Firm Since"),
                       keyboardType: TextInputType.number,
@@ -1227,7 +1274,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     TextFormField(
                       controller: customerName,
                       readOnly: isGstVerified,
-                      decoration: AppInputDecoration.input("Customer Name"),
+                      decoration: requiredDecoration("Customer Name"),
                       validator: (v) =>
                           requiredValidator(v, field: "Customer Name"),
                     ),
@@ -1237,7 +1284,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     TextFormField(
                       controller: firmName,
                       readOnly: isGstVerified,
-                      decoration: AppInputDecoration.input("Firm Name"),
+                      decoration: requiredDecoration("Firm Name"),
                       validator: (v) =>
                           requiredValidator(v, field: "Firm Name"),
                     ),
@@ -1256,7 +1303,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                       onChanged: (val) {
                         setState(() => gstType = val.toString());
                       },
-                      decoration: AppInputDecoration.input("GST Type"),
+                      decoration: requiredDecoration("GST Type"),
                       validator: (v) => requiredValidator(v, field: "GST Type"),
                     ),
                     const SizedBox(height: 12),
@@ -1286,7 +1333,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                         });
                         _formKey.currentState!.validate();
                       },
-                      decoration: AppInputDecoration.input("Firm Type"),
+                      decoration: requiredDecoration("Firm Type"),
                       validator: (v) =>
                           requiredValidator(v, field: "Firm Type"),
                     ),
@@ -1307,21 +1354,21 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     TextFormField(
                       controller: businessAddress,
                      readOnly: isGstVerified,
-                      decoration: AppInputDecoration.input("Business Address"),
+                      decoration: requiredDecoration("Business Address"),
                       validator: (v) =>
                           requiredValidator(v, field: "Business Address"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinesslandmark,
-                      decoration: AppInputDecoration.input("Business Landmark"),
+                      decoration: requiredDecoration("Business Landmark"),
                       validator: (v) =>
                           requiredValidator(v, field: "Business Landmark"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinessterritory,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Business Territory",
                       ),
                       validator: (v) =>
@@ -1331,28 +1378,28 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     TextFormField(
                       controller: bussinesstehsil,
                       readOnly: isGstVerified,
-                      decoration: AppInputDecoration.input("Tehsil"),
+                      decoration: requiredDecoration("Tehsil"),
                       validator: (v) => requiredValidator(v, field: "Tehsil"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinesstate,
                       readOnly: isGstVerified,
-                      decoration: AppInputDecoration.input("State"),
+                      decoration: requiredDecoration("State"),
                       validator: (v) => requiredValidator(v, field: "State"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinessdistrict,
                      readOnly: isGstVerified,
-                      decoration: AppInputDecoration.input("District"),
+                      decoration: requiredDecoration("District"),
                       validator: (v) => requiredValidator(v, field: "District"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinesspincode,
                      readOnly: isGstVerified,
-                      decoration: AppInputDecoration.input("Pincode"),
+                      decoration: requiredDecoration("Pincode"),
                       validator: (v) => requiredValidator(v, field: "Pincode"),
                     ),
 
@@ -1360,7 +1407,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     TextFormField(
                       controller: bussinesscontact,
-                      decoration: AppInputDecoration.input("Contact Number"),
+                      decoration: requiredDecoration("Contact Number"),
                       keyboardType: TextInputType.phone,
                       validator: (v) =>
                           requiredValidator(v, field: "Contact Number"),
@@ -1368,7 +1415,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: bussinessaltcontact,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Alternate Contact Number",
                       ),
                       keyboardType: TextInputType.phone,
@@ -1379,7 +1426,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     TextFormField(
                       controller: firmEmail,
-                      decoration: AppInputDecoration.input("Firm Email Id"),
+                      decoration: requiredDecoration("Firm Email Id"),
                       validator: (v) =>
                           requiredValidator(v, field: "Firm Email Id"),
                     ),
@@ -1387,7 +1434,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     TextFormField(
                       controller: firmPan,
-                      decoration: AppInputDecoration.input("Firm PAN Number"),
+                      decoration: requiredDecoration("Firm PAN Number"),
                       validator: (v) =>
                           requiredValidator(v, field: "Firm Pan Number"),
                     ),
@@ -1395,13 +1442,13 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                   
                     TextFormField(
                       controller: branch,
-                      decoration: AppInputDecoration.input("Branch"),
+                      decoration: requiredDecoration("Branch"),
                       validator: (v) => requiredValidator(v, field: "Branch"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: firmlandmark,
-                      decoration: AppInputDecoration.input("Firm Landmark"),
+                      decoration: requiredDecoration("Firm Landmark"),
                       validator: (v) =>
                           requiredValidator(v, field: "Firm Landmark"),
                     ),
@@ -1426,74 +1473,74 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                       ),
                       TextFormField(
                         controller: ownerName,
-                        decoration: AppInputDecoration.input("Name"),
+                        decoration: requiredDecoration("Name"),
                         validator: (v) =>
                             requiredValidator(v, field: "Owner Name"),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerFather,
-                        decoration: AppInputDecoration.input("Father Name"),
+                        decoration: requiredDecoration("Father Name"),
                         validator: (v) =>
                             requiredValidator(v, field: "Owner's Father Name"),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerPan,
-                        decoration: AppInputDecoration.input("PAN No"),
+                        decoration: requiredDecoration("PAN No"),
                         validator: (v) =>
                             requiredValidator(v, field: "Pan No."),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerAadhar,
-                        decoration: AppInputDecoration.input("Aadhar No"),
+                        decoration: requiredDecoration("Aadhar No"),
                         validator: (v) =>
                             requiredValidator(v, field: "Aadhar No."),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerAddress,
-                        decoration: AppInputDecoration.input("Address"),
+                        decoration: requiredDecoration("Address"),
                         validator: (v) =>
                             requiredValidator(v, field: "Address"),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerState,
-                        decoration: AppInputDecoration.input("State"),
+                        decoration: requiredDecoration("State"),
                         validator: (v) => requiredValidator(v, field: "State"),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerDistrict,
-                        decoration: AppInputDecoration.input("District"),
+                        decoration: requiredDecoration("District"),
                         validator: (v) =>
                             requiredValidator(v, field: "District"),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerTehsil,
-                        decoration: AppInputDecoration.input("Tehsil"),
+                        decoration: requiredDecoration("Tehsil"),
                         validator: (v) => requiredValidator(v, field: "Tehsil"),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerPincode,
-                        decoration: AppInputDecoration.input("Pincode"),
+                        decoration: requiredDecoration("Pincode"),
                         validator: (v) =>
                             requiredValidator(v, field: "Pincode"),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerMobile,
-                        decoration: AppInputDecoration.input("Mobile"),
+                        decoration: requiredDecoration("Mobile"),
                         validator: (v) => requiredValidator(v, field: "Mobile"),
                       ),
                       const SizedBox(height: 5),
                       TextFormField(
                         controller: ownerAltMobile,
-                        decoration: AppInputDecoration.input("Alt Mobile"),
+                        decoration: requiredDecoration("Alt Mobile"),
                         validator: (v) =>
                             requiredValidator(v, field: "Alt. Mobile"),
                       ),
@@ -1563,14 +1610,14 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                               TextFormField(
                                 controller: p["name"],
-                                decoration: AppInputDecoration.input("Name"),
+                                decoration: requiredDecoration("Name"),
                                 validator: (v) =>
                                     requiredValidator(v, field: "Name"),
                               ),
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["father_name"],
-                                decoration: AppInputDecoration.input(
+                                decoration: requiredDecoration(
                                   "Father Name",
                                 ),
                                 validator: (v) => requiredValidator(
@@ -1581,35 +1628,35 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["pan_no"],
-                                decoration: AppInputDecoration.input("PAN"),
+                                decoration: requiredDecoration("PAN"),
                                 validator: (v) =>
                                     requiredValidator(v, field: "Pan"),
                               ),
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["aadhar_no"],
-                                decoration: AppInputDecoration.input("Aadhar"),
+                                decoration: requiredDecoration("Aadhar"),
                                 validator: (v) =>
                                     requiredValidator(v, field: "Aadhar"),
                               ),
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["address"],
-                                decoration: AppInputDecoration.input("Address"),
+                                decoration: requiredDecoration("Address"),
                                 validator: (v) =>
                                     requiredValidator(v, field: "Address"),
                               ),
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["state"],
-                                decoration: AppInputDecoration.input("State"),
+                                decoration: requiredDecoration("State"),
                                 validator: (v) =>
                                     requiredValidator(v, field: "State"),
                               ),
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["district"],
-                                decoration: AppInputDecoration.input(
+                                decoration: requiredDecoration(
                                   "District",
                                 ),
                                 validator: (v) =>
@@ -1618,28 +1665,28 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["tehsil"],
-                                decoration: AppInputDecoration.input("Tehsil"),
+                                decoration: requiredDecoration("Tehsil"),
                                 validator: (v) =>
                                     requiredValidator(v, field: "Tehsil"),
                               ),
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["pincode"],
-                                decoration: AppInputDecoration.input("Pincode"),
+                                decoration: requiredDecoration("Pincode"),
                                 validator: (v) =>
                                     requiredValidator(v, field: "Pincode"),
                               ),
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["mobile"],
-                                decoration: AppInputDecoration.input("Mobile"),
+                                decoration: requiredDecoration("Mobile"),
                                 validator: (v) =>
                                     requiredValidator(v, field: "Mobile"),
                               ),
                               const SizedBox(height: 5),
                               TextFormField(
                                 controller: p["alt_mobile"],
-                                decoration: AppInputDecoration.input(
+                                decoration: requiredDecoration(
                                   "Alt Mobile",
                                 ),
                                 validator: (v) =>
@@ -1741,14 +1788,14 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: firmbankName,
-                      decoration: AppInputDecoration.input("Bank Name"),
+                      decoration: requiredDecoration("Bank Name"),
                       validator: (v) =>
                           requiredValidator(v, field: "Bank Name"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: firmbankAccountNumber,
-                      decoration: AppInputDecoration.input("Account Number"),
+                      decoration: requiredDecoration("Account Number"),
                       validator: (v) =>
                           requiredValidator(v, field: "Account Number"),
                       keyboardType: TextInputType.number,
@@ -1756,21 +1803,21 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: firmbankIfsc,
-                      decoration: AppInputDecoration.input("IFSC Code"),
+                      decoration: requiredDecoration("IFSC Code"),
                       validator: (v) =>
                           requiredValidator(v, field: "IFSC Code"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: firmbankBranch,
-                      decoration: AppInputDecoration.input("Bank Branch"),
+                      decoration: requiredDecoration("Bank Branch"),
                       validator: (v) =>
                           requiredValidator(v, field: "Bank Branch"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: cheque1Number,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Security Cheque 1 No.",
                       ),
                       validator: (v) =>
@@ -1779,7 +1826,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: cheque2Number,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Security Cheque 2 No.",
                       ),
                       validator: (v) =>
@@ -1788,14 +1835,14 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: annualTurnover,
-                      decoration: AppInputDecoration.input("Annual Turnover"),
+                      decoration: requiredDecoration("Annual Turnover"),
                       validator: (v) =>
                           requiredValidator(v, field: "Annual Turnover"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: creditdurationperiod,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Credit Duration Period (in days)",
                       ),
                       validator: (v) => requiredValidator(
@@ -1806,21 +1853,21 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                       TextFormField(
                       controller: creditAmount,
-                      decoration: AppInputDecoration.input("CC/OD"),
+                      decoration: requiredDecoration("CC/OD"),
                       validator: (v) =>
                           requiredValidator(v, field: "CC/OD Amount"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: securityamount,
-                      decoration: AppInputDecoration.input("Security Amount"),
+                      decoration: requiredDecoration("Security Amount"),
                       validator: (v) =>
                           requiredValidator(v, field: "Security Amount"),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: expectedsaleperyear,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Expected Sale Per Year",
                       ),
                       validator: (v) =>
@@ -1849,7 +1896,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                       TextFormField(
                         controller: sourceDetailsController,
-                        decoration: AppInputDecoration.input(
+                        decoration: requiredDecoration(
                           sourceOfFunds == "own_funds"
                               ? "Enter Own Funds Details"
                               : sourceOfFunds == "loan"
@@ -1870,7 +1917,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
 
                     TextFormField(
                       controller: seedLicenseNumber,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Seed License Number",
                       ),
                       validator: (v) =>
@@ -1903,7 +1950,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: fertilizerLicenseNumber,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Fertilizer License Number",
                       ),
                       validator: (v) => requiredValidator(
@@ -1922,7 +1969,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: transportAgency1Name,
-                      decoration: AppInputDecoration.input(
+                      decoration: requiredDecoration(
                         "Transport Agency 1 Name",
                       ),
                       validator: (v) => requiredValidator(
@@ -2085,6 +2132,21 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                           setState(() => pesticideLicenseFile = val),
                     ),
 
+                     const Padding(
+  padding: EdgeInsets.only(bottom: 4),
+  child: Align(
+    alignment: Alignment.centerLeft,
+    child: Text(
+      "* indicates required fields",
+      style: TextStyle(
+        fontSize: 12,
+        color: Colors.grey,
+        fontStyle: FontStyle.italic,
+      ),
+    ),
+  ),
+),
+const SizedBox(height: 10),
                     ///  SUBMIT BUTTON
                     InkWell(
                       onTap: submitDistributor,
@@ -2112,6 +2174,7 @@ class _DistributorOnboardingPageState extends State<DistributorOnboardingPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
+      
                     Row(
                       children: [
                         Expanded(

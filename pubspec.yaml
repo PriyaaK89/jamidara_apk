@@ -90,6 +90,8 @@ flutter:
     - assets/images/jamidara_logo.png
     - assets/images/mirrorless.png
     - assets/images/visit_remaining.png
+    - assets/images/jamidara_logo_transparent.png
+    - assets/images/login_bg.jpg
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

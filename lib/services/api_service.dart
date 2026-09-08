@@ -150,10 +150,24 @@ class ApiService {
     print('Body: ${response.body}');
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      return {"success": false, "message": response.body};
-    }
+  return jsonDecode(response.body);
+} else {
+  try {
+    final decoded = jsonDecode(response.body);
+    return {
+      "success": false,
+      "message": decoded['message'] ?? 'Something went wrong',
+    };
+  } catch (e) {
+    return {"success": false, "message": "Something went wrong (${response.statusCode})"};
+  }
+}
+
+    // if (response.statusCode == 200) {
+    //   return jsonDecode(response.body);
+    // } else {
+    //   return {"success": false, "message": response.body};
+    // }
   }
 
   static Future<Map<String, dynamic>> getTodayVisitCount(String token) async {
@@ -1917,14 +1931,21 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getEmployeeTargetProgress({
+ static Future<Map<String, dynamic>> getEmployeeTargetProgress({
   required String token,
   required int employeeId,
+  String? startDate,
+  String? endDate,
 }) async {
   final prefs = await SharedPreferences.getInstance();
   final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+  final params = <String, String>{'user_id': employeeId.toString()};
+  if (startDate != null) params['start_date'] = startDate;
+  if (endDate != null) params['end_date'] = endDate;
+
   final url = Uri.parse('$baseUrl${Endpoints.getTeamTargets}')
-      .replace(queryParameters: {'user_id': employeeId.toString()});
+      .replace(queryParameters: params);
 
   debugPrint('getEmployeeTargetProgress → $url');
 
@@ -1947,6 +1968,45 @@ class ApiService {
     }
   } catch (e) {
     return {"success": false, "message": e.toString()};
+  }
+}
+
+static Future<Map<String, dynamic>> getMyVisitProgress(
+  String token, {
+  String? startDate,
+  String? endDate,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
+
+  final params = <String, String>{};
+  if (startDate != null) params['start_date'] = startDate;
+  if (endDate != null) params['end_date'] = endDate;
+
+  final url = Uri.parse('$baseUrl${Endpoints.getMyVisitProgress}')
+      .replace(queryParameters: params.isEmpty ? null : params);
+
+  try {
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final responseData = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return responseData;
+    } else {
+      return {
+        "success": false,
+        "message": responseData['message'] ?? 'Failed to fetch progress',
+      };
+    }
+  } catch (e) {
+    return {"success": false, "message": "Exception occurred: $e"};
   }
 }
 }

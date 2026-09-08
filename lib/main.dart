@@ -29,6 +29,11 @@ StreamSubscription<geo.ServiceStatus>? _serviceStatusSubscription;
 int _streamErrorCount = 0;
 const int _maxStreamErrors = 3;
 
+Timer? _credentialTimer;
+Timer? _visitCheckTimer;
+Timer? _statusCheckTimer;
+Timer? _watchdogTimer;
+
 Future<void> _loadCredentials() async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.reload();
@@ -164,57 +169,56 @@ void _startLocationStream(ServiceInstance service) {
 
   print("Starting GPS location stream...");
 
-  _locationSubscription = geo.Geolocator.getPositionStream(
-  locationSettings: geo.AndroidSettings(
-    accuracy: geo.LocationAccuracy.high,
-    distanceFilter: 0,
-    intervalDuration: const Duration(seconds: 30),
-    foregroundNotificationConfig: const geo.ForegroundNotificationConfig(
-      notificationText: "Tracking your location",
-      notificationTitle: "Location Active",
-      enableWakeLock: true,
-      setOngoing: true,
-    ),
-  ),
-).listen(
-    (geo.Position position) async {
-      _streamErrorCount = 0;
-       _currentLocationStatus = "ON";
-      print("LOCATION: ${DateTime.now()}");
-      await sendLocationFromStream(service, position);
-    },
-    onError: (error) {
-      _streamErrorCount++;
-      print("Stream error ($_streamErrorCount/$_maxStreamErrors): $error");
+  _locationSubscription =
+      geo.Geolocator.getPositionStream(
+        locationSettings: geo.AndroidSettings(
+          accuracy: geo.LocationAccuracy.high,
+          distanceFilter: 0,
+          intervalDuration: const Duration(seconds: 30),
+          foregroundNotificationConfig: const geo.ForegroundNotificationConfig(
+            notificationText: "Tracking your location",
+            notificationTitle: "Location Active",
+            enableWakeLock: true,
+            setOngoing: true,
+          ),
+        ),
+      ).listen(
+        (geo.Position position) async {
+          _streamErrorCount = 0;
+          _currentLocationStatus = "ON";
+          print("LOCATION: ${DateTime.now()}");
+          await sendLocationFromStream(service, position);
+        },
+        onError: (error) {
+          _streamErrorCount++;
+          print("Stream error ($_streamErrorCount/$_maxStreamErrors): $error");
 
-      if (_streamErrorCount >= _maxStreamErrors) {
-        print("Max stream errors reached. Restarting stream in 30s...");
-        _locationSubscription?.cancel();
-        _locationSubscription = null;
-        Future.delayed(const Duration(seconds: 30), () {
-          _startLocationStream(service);
-        });
-      }
-    },
-    cancelOnError: false,
-  );
+          if (_streamErrorCount >= _maxStreamErrors) {
+            print("Max stream errors reached. Restarting stream in 30s...");
+            _locationSubscription?.cancel();
+            _locationSubscription = null;
+            Future.delayed(const Duration(seconds: 30), () {
+              _startLocationStream(service);
+            });
+          }
+        },
+        cancelOnError: false,
+      );
 }
 
 // ─── Send location to API ─────────────────────────────────────────────────────
 Future<void> sendLocationFromStream(
-  
   ServiceInstance service,
   geo.Position position,
 ) async {
   try {
-    
     final prefs = await SharedPreferences.getInstance();
-final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
+    final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
 
-if (!isCheckedIn) {
-  print("LOCATION SKIPPED: User not checked in");
-  return;
-}
+    if (!isCheckedIn) {
+      print("LOCATION SKIPPED: User not checked in");
+      return;
+    }
     final employeeId = _cachedEmployeeId;
     final token = _cachedToken;
 
@@ -340,6 +344,12 @@ Future<void> checkVisitsAndNotify() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
 
+    final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
+    if (!isCheckedIn) {
+      print("VISIT CHECK SKIPPED: user not checked in");
+      return;
+    }
+
     final token = prefs.getString('token') ?? '';
     final baseUrl = prefs.getString('FLUTTER_BASE_URL') ?? '';
     final workType = prefs.getString('work_type') ?? '';
@@ -372,10 +382,7 @@ Future<void> checkVisitsAndNotify() async {
               ? "You haven't started visits yet. Complete 4 visits to avoid half day."
               : "You have only $visits visits. Complete 4 visits to avoid half day.";
 
-          await NotificationService.showNotification(
-            "Visit Reminder",
-            message,
-          );
+          await NotificationService.showNotification("Visit Reminder", message);
           print("NOTIFICATION SENT");
         }
       }
@@ -388,13 +395,12 @@ Future<void> checkVisitsAndNotify() async {
 void _listenToLocationService(ServiceInstance service) {
   _serviceStatusSubscription?.cancel();
 
-  _serviceStatusSubscription =
-      geo.Geolocator.getServiceStatusStream().listen((status) async {
-
+  _serviceStatusSubscription = geo.Geolocator.getServiceStatusStream().listen((
+    status,
+  ) async {
     print("GPS STATUS CHANGED: $status");
 
-    String newStatus =
-        status == geo.ServiceStatus.enabled ? "ON" : "OFF";
+    String newStatus = status == geo.ServiceStatus.enabled ? "ON" : "OFF";
 
     //  Only send when actual change happens
     if (_currentLocationStatus == newStatus) {
@@ -410,14 +416,14 @@ void _listenToLocationService(ServiceInstance service) {
     //   locationOverride: newStatus,
     // );
     final shouldLogout = await StatusService.sendStatus(
-  locationOverride: newStatus,
-);
+      locationOverride: newStatus,
+    );
 
-if (shouldLogout) {
-  print("Instant logout trigger");
+    if (shouldLogout) {
+      print("Instant logout trigger");
 
-  service.invoke("forceLogout"); // immediate logout
-}
+      service.invoke("forceLogout"); // immediate logout
+    }
   });
 }
 
@@ -430,13 +436,13 @@ void onStart(ServiceInstance service) async {
 
   final prefs = await SharedPreferences.getInstance();
   await prefs.reload();
-final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
+  final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
 
-if (!isCheckedIn) {
-  print("Service started but user not checked in — stopping");
-  service.stopSelf();
-  return;
-}
+  if (!isCheckedIn) {
+    print("Service started but user not checked in — stopping");
+    service.stopSelf();
+    return;
+  }
 
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((_) {
@@ -466,31 +472,27 @@ if (!isCheckedIn) {
 
   await checkVisitsAndNotify();
 
-  Timer.periodic(const Duration(minutes: 10), (_) async {
+  _credentialTimer = Timer.periodic(const Duration(minutes: 10), (_) async {
     await _loadCredentials();
     print("Credentials refreshed");
   });
 
-  Timer.periodic(const Duration(minutes: 18), (_) async {
+  _visitCheckTimer = Timer.periodic(const Duration(minutes: 18), (_) async {
     print("VISIT CHECK TIMER");
     await checkVisitsAndNotify();
   });
 
-  Timer.periodic(const Duration(minutes: 1), (_) async {
+  _statusCheckTimer = Timer.periodic(const Duration(minutes: 1), (_) async {
     print("STATUS CHECK RUNNING");
-    // await StatusService.sendStatus();
-      final shouldLogout = await StatusService.sendStatus();
-
-  if (shouldLogout) {
-    print(" Sending logout event to UI");
-
-    service.invoke("forceLogout"); // correct place
-  }
-
+    final shouldLogout = await StatusService.sendStatus();
+    if (shouldLogout) {
+      print(" Sending logout event to UI");
+      service.invoke("forceLogout");
+    }
     print("SERVICE STILL RUNNING");
   });
 
-  Timer.periodic(const Duration(minutes: 6), (_) {
+  _watchdogTimer = Timer.periodic(const Duration(minutes: 6), (_) {
     if (_locationSubscription == null) {
       print("WATCHDOG: GPS stream is dead — restarting...");
       _startLocationStream(service);
@@ -498,7 +500,6 @@ if (!isCheckedIn) {
       print("WATCHDOG: GPS stream is alive ✓");
     }
   });
-
   _startLocationStream(service);
 
   service.on('stopService').listen((event) async {
@@ -507,16 +508,55 @@ if (!isCheckedIn) {
     _locationSubscription = null;
 
     _serviceStatusSubscription?.cancel();
-_serviceStatusSubscription = null;
+    _serviceStatusSubscription = null;
+
+    _credentialTimer?.cancel();
+    _credentialTimer = null;
+
+    _visitCheckTimer?.cancel();
+    _visitCheckTimer = null;
+
+    _statusCheckTimer?.cancel();
+    _statusCheckTimer = null;
+
+    _watchdogTimer?.cancel();
+    _watchdogTimer = null;
 
     // FIX: Clear the checked-in flag when service is stopped via day_over
     // so that _resumeServiceIfNeeded() does NOT restart it on next app launch.
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_checked_in', false);
     await prefs.remove('work_type');
+    await prefs.remove('last_notify_time');
 
     service.stopSelf();
   });
+
+  service.on('restartTracking').listen((event) async {
+  print("RESTART TRACKING CALLED (cleaning up stale session)");
+  _locationSubscription?.cancel();
+  _locationSubscription = null;
+
+  _serviceStatusSubscription?.cancel();
+  _serviceStatusSubscription = null;
+
+  _credentialTimer?.cancel();
+  _credentialTimer = null;
+
+  _visitCheckTimer?.cancel();
+  _visitCheckTimer = null;
+
+  _statusCheckTimer?.cancel();
+  _statusCheckTimer = null;
+
+  _watchdogTimer?.cancel();
+  _watchdogTimer = null;
+
+  // Deliberately NOT touching is_checked_in / work_type / last_notify_time —
+  // the Attendance page already wrote the fresh values for the new session.
+  // This event only tears down the OLD isolate before it dies.
+  service.stopSelf();
+});
 }
 
 class MyApp extends StatelessWidget {

@@ -40,8 +40,9 @@ class Endpoints {
   static const String getNotificationsCount = "/get-notification-counts";
   static const String markNotificationsRead = "/mark-notifications-read";
 
-  static const String getEmployeeVisitProgress =
-      "/visit-targets/progress/employee"; // append /:employeeId
+  static const String getEmployeeVisitProgress = "/visit-targets/progress/employee"; // append /:employeeId
+  static const String getMyVisitProgress = "/visit-targets/progress/me"; // append /:employeeId
+  
   static const String getVisitTargetHistory = "/visit-targets/progress/history";
 
   static const String createReceiptRequest = "/create-receipt-approval-request";

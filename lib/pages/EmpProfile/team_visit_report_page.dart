@@ -134,15 +134,20 @@ Future<Map<String, String>> _authHeaders() async {
   return {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'};
 }
 
+/// Fetches team visit summaries for a date RANGE (start–end inclusive).
 Future<List<HierarchyVisitSummary>> fetchHierarchyVisits({
-  required String date,
+  required String startDate,
+  required String endDate,
   int? level,
   int? userId,
 }) async {
   final base = await _baseUrl();
   final headers = await _authHeaders();
 
-  final params = <String, String>{'date': date};
+  final params = <String, String>{
+    'start_date': startDate,
+    'end_date': endDate,
+  };
   if (level != null) params['level'] = level.toString();
   if (userId != null) params['user_id'] = userId.toString();
 
@@ -182,22 +187,32 @@ Future<List<LevelUser>> fetchUsersByLevel(int level) async {
   );
 }
 
-/// Fetches the current active target (target vs achieved by visit_type)
-/// for a single employee, via ApiService.getEmployeeTargetProgress.
-/// Returns null if that employee has no active assignment right now, or
-/// if the call didn't succeed.
-Future<EmployeeActiveTarget?> fetchEmployeeTargetProgress(int userId) async {
+/// Fetches the target (target vs achieved by visit_type) for a single
+/// employee, via ApiService.getEmployeeTargetProgress. When startDate/
+/// endDate are passed, the backend auto-detects whichever assignment's
+/// period overlaps that range (falls back to "current active" when
+/// omitted). Returns null if no matching assignment exists, or if the
+/// call didn't succeed.
+Future<EmployeeActiveTarget?> fetchEmployeeTargetProgress(
+  int userId, {
+  String? startDate,
+  String? endDate,
+}) async {
   final token = await StorageService.getToken();
   final result = await ApiService.getEmployeeTargetProgress(
     token: token ?? '',
     employeeId: userId,
+    startDate: startDate,
+    endDate: endDate,
   );
 
-  debugPrint('fetchEmployeeTargetProgress($userId) → $result');
+  debugPrint(
+    'fetchEmployeeTargetProgress($userId, $startDate–$endDate) → $result',
+  );
 
   if (result['success'] == true) {
     final List<dynamic> data = result['data'] ?? [];
-    if (data.isEmpty) return null; // no active assignment for this employee
+    if (data.isEmpty) return null; // no matching assignment for this employee
     return EmployeeActiveTarget.fromJson(data.first as Map<String, dynamic>);
   }
 
@@ -270,17 +285,24 @@ class VisitTypeProgress {
   }
 }
 
-/// Drop-in widget showing an employee's current running target — placed
-/// above the employee row in _VisitCard (and can also be reused at the
-/// top of visit_details_modal.dart's content), passing in the employee's
-/// userId.
+/// Drop-in widget showing an employee's target for the selected date
+/// range — placed above the employee row in _VisitCard (and can also be
+/// reused at the top of visit_details_modal.dart's content), passing in
+/// the employee's userId plus the selected startDate/endDate.
 ///
 /// Always renders something: the real progress card, an explicit
-/// "no active target" card, or an error card — never disappears.
+/// "no target for this range" card, or an error card — never disappears.
 class EmployeeTargetSummaryCard extends StatefulWidget {
   final int userId;
+  final String startDate;
+  final String endDate;
 
-  const EmployeeTargetSummaryCard({super.key, required this.userId});
+  const EmployeeTargetSummaryCard({
+    super.key,
+    required this.userId,
+    required this.startDate,
+    required this.endDate,
+  });
 
   @override
   State<EmployeeTargetSummaryCard> createState() =>
@@ -301,7 +323,9 @@ class _EmployeeTargetSummaryCardState extends State<EmployeeTargetSummaryCard> {
   @override
   void didUpdateWidget(covariant EmployeeTargetSummaryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.userId != widget.userId) {
+    if (oldWidget.userId != widget.userId ||
+        oldWidget.startDate != widget.startDate ||
+        oldWidget.endDate != widget.endDate) {
       setState(() {
         _loading = true;
         _target = null;
@@ -313,7 +337,11 @@ class _EmployeeTargetSummaryCardState extends State<EmployeeTargetSummaryCard> {
 
   Future<void> _load() async {
     try {
-      final result = await fetchEmployeeTargetProgress(widget.userId);
+      final result = await fetchEmployeeTargetProgress(
+        widget.userId,
+        startDate: widget.startDate,
+        endDate: widget.endDate,
+      );
       if (!mounted) return;
       setState(() => _target = result);
     } catch (e) {
@@ -380,7 +408,7 @@ class _EmployeeTargetSummaryCardState extends State<EmployeeTargetSummaryCard> {
       );
     }
 
-    // No active assignment for this employee.
+    // No assignment overlapping this range.
     if (_target == null) {
       return Container(
         width: double.infinity,
@@ -408,7 +436,7 @@ class _EmployeeTargetSummaryCardState extends State<EmployeeTargetSummaryCard> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'No active visit target assigned',
+                'No visit target for this period',
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey[600],
@@ -471,7 +499,7 @@ class _EmployeeTargetSummaryCardState extends State<EmployeeTargetSummaryCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Current Target',
+                      'Target',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 12.5,
@@ -635,7 +663,10 @@ class TeamVisitReportPage extends StatefulWidget {
 
 class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
   // ── filter state ──
-  DateTime _selectedDate = DateTime.now();
+  // Defaults to "today → today" so existing behavior is unchanged until
+  // the user actively picks a range.
+  DateTime _startDate = DateTime.now();
+  DateTime _endDate = DateTime.now();
   Map<String, dynamic>? _selectedLevelOption;
   LevelUser? _selectedUser;
 
@@ -676,9 +707,11 @@ class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
       _error = null;
     });
     try {
-      final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      final startStr = DateFormat('yyyy-MM-dd').format(_startDate);
+      final endStr = DateFormat('yyyy-MM-dd').format(_endDate);
       final results = await fetchHierarchyVisits(
-        date: dateStr,
+        startDate: startStr,
+        endDate: endStr,
         level: _selectedLevelOption?['level'] as int?,
         userId: _selectedUser?.id,
       );
@@ -717,10 +750,10 @@ class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
     _loadVisits();
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: _selectedDate,
+      initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
       firstDate: DateTime(2023),
       lastDate: DateTime.now(),
       builder: (ctx, child) => Theme(
@@ -734,8 +767,11 @@ class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
         child: child!,
       ),
     );
-    if (picked != null && picked != _selectedDate) {
-      setState(() => _selectedDate = picked);
+    if (picked != null) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+      });
       _loadVisits();
     }
   }
@@ -841,7 +877,7 @@ class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
         children: [
-          _buildDateRow(),
+          _buildDateRangeRow(),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -857,41 +893,134 @@ class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
     );
   }
 
-  Widget _buildDateRow() {
+   // ── date range row: two independent inputs ──
+  Widget _buildDateRangeRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildDateBox(
+            label: 'Start Date',
+            date: _startDate,
+            onTap: _pickStartDate,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _buildDateBox(
+            label: 'End Date',
+            date: _endDate,
+            onTap: _pickEndDate,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateBox({
+    required String label,
+    required DateTime date,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
-      onTap: _pickDate,
+      onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: _kBg,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: _kBorder),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(
-              Icons.calendar_today_rounded,
-              color: _kPrimaryGreen,
-              size: 18,
+            Row(
+              children: [
+                const Icon(
+                  Icons.date_range_rounded,
+                  color: _kPrimaryGreen,
+                  size: 14,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            Text(
-              DateFormat('dd MMM yyyy').format(_selectedDate),
-              style: const TextStyle(
-                color: _kInk,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('dd MMM yyyy').format(date),
+                  style: const TextStyle(
+                    color: _kInk,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                Icon(Icons.arrow_drop_down, color: Colors.grey[500], size: 18),
+              ],
             ),
-            const Spacer(),
-            Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
           ],
         ),
       ),
     );
   }
 
+  Future<void> _pickStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2023),
+      // start can't be after the current end date
+      lastDate: _endDate,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: _kDarkGreen,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() => _startDate = picked);
+      _loadVisits();
+    }
+  }
+
+  Future<void> _pickEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate,
+      // end can't be before the current start date
+      firstDate: _startDate,
+      lastDate: DateTime.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: _kDarkGreen,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() => _endDate = picked);
+      _loadVisits();
+    }
+  }
+  
   Widget _buildLevelDropdown() {
     return _styledDropdown<Map<String, dynamic>?>(
       hint: 'All Levels',
@@ -1114,6 +1243,13 @@ class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
     }
 
     if (_visits.isEmpty) {
+      final sameDay = DateFormat('yyyy-MM-dd').format(_startDate) ==
+          DateFormat('yyyy-MM-dd').format(_endDate);
+      final rangeLabel = sameDay
+          ? 'on ${DateFormat('dd MMM yyyy').format(_startDate)}'
+          : 'from ${DateFormat('dd MMM yyyy').format(_startDate)} to '
+            '${DateFormat('dd MMM yyyy').format(_endDate)}';
+
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1132,7 +1268,7 @@ class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
             ),
             const SizedBox(height: 14),
             Text(
-              'No visits on ${DateFormat('dd MMM yyyy').format(_selectedDate)}',
+              'No visits $rangeLabel',
               style: const TextStyle(
                 color: _kSubInk,
                 fontWeight: FontWeight.w500,
@@ -1155,7 +1291,8 @@ class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
           key: ValueKey(_visits[i].id),
           summary: _visits[i],
           roleColor: _roleColor(_visits[i].roleName),
-          selectedDate: DateFormat('yyyy-MM-dd').format(_selectedDate),
+          startDate: DateFormat('yyyy-MM-dd').format(_startDate),
+          endDate: DateFormat('yyyy-MM-dd').format(_endDate),
           isMe: _myEmployeeId != null && _visits[i].id == _myEmployeeId,
         ),
       ),
@@ -1170,14 +1307,16 @@ class _TeamVisitReportPageState extends State<TeamVisitReportPage> {
 class _VisitCard extends StatelessWidget {
   final HierarchyVisitSummary summary;
   final Color roleColor;
-  final String selectedDate;
+  final String startDate;
+  final String endDate;
   final bool isMe;
 
   const _VisitCard({
     super.key,
     required this.summary,
     required this.roleColor,
-    required this.selectedDate,
+    required this.startDate,
+    required this.endDate,
     this.isMe = false,
   });
 
@@ -1315,7 +1454,8 @@ class _VisitCard extends StatelessWidget {
                       userId: summary.id,
                       employeeName: summary.name,
                       totalVisits: summary.totalVisits,
-                      date: selectedDate,
+                      startDate: startDate,
+                      endDate: endDate,
                     );
                   },
                   child: Container(
@@ -1362,10 +1502,13 @@ class _VisitCard extends StatelessWidget {
             Divider(height: 1, color: _kBorder),
             const SizedBox(height: 12),
 
-            // ── Current target progress, shown below the employee row ──
+            // ── Target progress for the selected range, shown below the
+            // employee row ──
             EmployeeTargetSummaryCard(
-              key: ValueKey('target_${summary.id}'),
+              key: ValueKey('target_${summary.id}_${startDate}_$endDate'),
               userId: summary.id,
+              startDate: startDate,
+              endDate: endDate,
             ),
           ],
         ),

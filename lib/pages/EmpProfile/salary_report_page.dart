@@ -183,7 +183,8 @@ Widget buildTable() {
             DataColumn(label: Text("Hours")),
             DataColumn(label: Text("Per Day")),
             DataColumn(label: Text("TA")),
-            DataColumn(label: Text("DA")),
+            DataColumn(label: Text("DA (With Doc)")),
+            DataColumn(label: Text("DA (Without Doc)")),
             DataColumn(label: Text("Net Salary")),
           ],
           rows: List.generate(salary.length, (index) {
@@ -210,7 +211,8 @@ Widget buildTable() {
                 DataCell(Text("₹ ${item["travelling_allowance"] ?? "0"}")),
 
                 // DA
-                DataCell(Text("₹ ${item["daily_allowance"] ?? "0"}")),
+                DataCell(Text("₹ ${item["daily_allowance_with_doc"] ?? "0"}")),
+                DataCell(Text("₹ ${item["daily_allowance_without_doc"] ?? "0"}")),
 
                 // Net Salary
                 DataCell(Text(

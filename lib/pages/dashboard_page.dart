@@ -104,30 +104,27 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   /// Fetch the employee's current active target + progress
-  Future<void> _loadTargetProgress() async {
-    debugPrint('DashboardPage employeeId = ${widget.employeeId}');
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString("token") ?? "";
+ Future<void> _loadTargetProgress() async {
+  debugPrint('DashboardPage employeeId = ${widget.employeeId}');
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token") ?? "";
 
-      final res = await ApiService.getEmployeeVisitProgress(
-        token,
-        widget.employeeId,
-      );
+    final res = await ApiService.getMyVisitProgress(token);
 
-      if (res["success"] == true) {
-        setState(() {
-          targetProgress = res["data"]; // null if no active target
-          isLoadingTarget = false;
-        });
-      } else {
-        setState(() => isLoadingTarget = false);
-      }
-    } catch (e) {
-      debugPrint("Target progress error: $e");
+    if (res["success"] == true) {
+      setState(() {
+        targetProgress = res["data"]; // null if no active target
+        isLoadingTarget = false;
+      });
+    } else {
       setState(() => isLoadingTarget = false);
     }
+  } catch (e) {
+    debugPrint("Target progress error: $e");
+    setState(() => isLoadingTarget = false);
   }
+}
 
   ///  API Call to check today's visits
   Future<void> _checkVisitReminder() async {

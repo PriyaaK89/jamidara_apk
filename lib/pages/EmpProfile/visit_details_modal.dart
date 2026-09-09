@@ -71,13 +71,23 @@ class VisitDetail {
 // API
 // ─────────────────────────────────────────────
 
-Future<List<VisitDetail>> fetchUserVisitDetails(int userId, String date) async {
+/// Fetches visit details for a user across a date RANGE (start–end
+/// inclusive) — mirrors fetchHierarchyVisits' start_date/end_date pattern.
+Future<List<VisitDetail>> fetchUserVisitDetails(
+  int userId, {
+  required String startDate,
+  required String endDate,
+}) async {
   final prefs = await SharedPreferences.getInstance();
   final base = prefs.getString('FLUTTER_BASE_URL') ?? '';
   final token = await StorageService.getToken();
 
-  final uri = Uri.parse('$base/get-hierarchy-visits/$userId')
-      .replace(queryParameters: {'date': date});
+  final uri = Uri.parse('$base/get-hierarchy-visits/$userId').replace(
+    queryParameters: {
+      'start_date': startDate,
+      'end_date': endDate,
+    },
+  );
   debugPrint('fetchUserVisitDetails → $uri');
 
   final response = await http.get(uri, headers: {
@@ -103,7 +113,8 @@ void showVisitDetailsModal(
   required int userId,
   required String employeeName,
   required int totalVisits,
-  required String date,
+  required String startDate,
+  required String endDate,
 }) {
   showModalBottomSheet(
     context: context,
@@ -113,7 +124,8 @@ void showVisitDetailsModal(
       userId: userId,
       employeeName: employeeName,
       totalVisits: totalVisits,
-       date: date,
+      startDate: startDate,
+      endDate: endDate,
     ),
   );
 }
@@ -126,13 +138,15 @@ class _VisitDetailsModal extends StatefulWidget {
   final int userId;
   final String employeeName;
   final int totalVisits;
-  final String date;
+  final String startDate;
+  final String endDate;
 
   const _VisitDetailsModal({
     required this.userId,
     required this.employeeName,
     required this.totalVisits,
-    required this.date,
+    required this.startDate,
+    required this.endDate,
   });
 
   @override
@@ -151,41 +165,37 @@ class _VisitDetailsModalState extends State<_VisitDetailsModal> {
   }
 
   Future<void> _load() async {
-  try {
-    final data = await fetchUserVisitDetails(widget.userId, widget.date);
-    setState(() {
-      _visits = data;
-      _loading = false;
-    });
-  } catch (e) {
-    setState(() {
-      _error = e.toString();
-      _loading = false;
-    });
+    try {
+      final data = await fetchUserVisitDetails(
+        widget.userId,
+        startDate: widget.startDate,
+        endDate: widget.endDate,
+      );
+      setState(() {
+        _visits = data;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
   }
-}
 
   // ── helpers ──
-  // String _formatDate(String raw) {
-  //   try {
-  //     final dt = DateTime.parse(raw).toLocal();
-  //     return DateFormat('dd MMM yyyy, hh:mm a').format(dt);
-  //   } catch (_) {
-  //     return raw;
-  //   }
-  // }
   String _formatDate(String raw) {
-  try {
-    // Force UTC interpretation, regardless of whether the string has 'Z' or not
-    DateTime dt = DateTime.parse(raw);
-    if (!raw.endsWith('Z') && !raw.contains('+')) {
-      dt = DateTime.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
+    try {
+      // Force UTC interpretation, regardless of whether the string has 'Z' or not
+      DateTime dt = DateTime.parse(raw);
+      if (!raw.endsWith('Z') && !raw.contains('+')) {
+        dt = DateTime.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
+      }
+      return DateFormat('dd MMM yyyy, hh:mm a').format(dt.toLocal());
+    } catch (_) {
+      return raw;
     }
-    return DateFormat('dd MMM yyyy, hh:mm a').format(dt.toLocal());
-  } catch (_) {
-    return raw;
   }
-}
 
   String _formatReminderDate(String? raw) {
     if (raw == null || raw.isEmpty) return '—';
@@ -224,6 +234,12 @@ class _VisitDetailsModalState extends State<_VisitDetailsModal> {
       case 'distributor': return const Color(0xFF1565C0);
       default:            return const Color(0xFF757575);
     }
+  }
+
+  /// "12 Jan 2026" if start == end, otherwise "12 Jan 2026 - 14 Jan 2026"
+  String get _rangeLabel {
+    if (widget.startDate == widget.endDate) return widget.startDate;
+    return '${widget.startDate} - ${widget.endDate}';
   }
 
   // ── build ──
@@ -289,7 +305,7 @@ class _VisitDetailsModalState extends State<_VisitDetailsModal> {
                   ),
                 ),
                 Text(
-                  '${widget.totalVisits} visit${widget.totalVisits != 1 ? 's' : ''} today',
+                  '${widget.totalVisits} visit${widget.totalVisits != 1 ? 's' : ''} · $_rangeLabel',
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
@@ -387,7 +403,7 @@ class _VisitDetailsModalState extends State<_VisitDetailsModal> {
 }
 
 // ─────────────────────────────────────────────
-// Visit Detail Card
+// Visit Detail Card  (unchanged)
 // ─────────────────────────────────────────────
 
 class _VisitDetailCard extends StatelessWidget {
@@ -429,7 +445,6 @@ class _VisitDetailCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Card header ──
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -459,24 +474,18 @@ class _VisitDetailCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     formatDate(visit.createdAt),
-                    style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12),
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   ),
                 ),
-                // Purpose badge
                 _badge(purposeLabel(visit.visitPurpose), pColor),
               ],
             ),
           ),
-
-          // ── Card body ──
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Visit type + customer type row
                 Row(
                   children: [
                     _badge(
@@ -493,23 +502,17 @@ class _VisitDetailCard extends StatelessWidget {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 12),
                 const Divider(height: 1),
                 const SizedBox(height: 12),
-
-                // Customer info
                 _sectionTitle('Customer Info'),
                 const SizedBox(height: 8),
                 _infoRow(Icons.person_outline, 'Name', visit.customerName),
                 _infoRow(Icons.business_outlined, 'Firm', visit.firmName),
                 _infoRow(Icons.phone_outlined, 'Contact', visit.contactNumber),
-
                 const SizedBox(height: 12),
                 const Divider(height: 1),
                 const SizedBox(height: 12),
-
-                // Location
                 _sectionTitle('Location'),
                 const SizedBox(height: 8),
                 _infoRow(Icons.location_on_outlined, 'Address', visit.address),
@@ -517,8 +520,6 @@ class _VisitDetailCard extends StatelessWidget {
                 if (visit.district != null && visit.district!.isNotEmpty)
                   _infoRow(Icons.corporate_fare_outlined, 'District', visit.district!),
                 _infoRow(Icons.pin_drop_outlined, 'Pincode', visit.pincode),
-
-                // Comment
                 if (visit.comment.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const Divider(height: 1),
@@ -530,8 +531,6 @@ class _VisitDetailCard extends StatelessWidget {
                     style: TextStyle(color: Colors.grey[700], fontSize: 13),
                   ),
                 ],
-
-                // Reminder
                 if (visit.reminderDate != null) ...[
                   const SizedBox(height: 12),
                   const Divider(height: 1),
@@ -543,8 +542,6 @@ class _VisitDetailCard extends StatelessWidget {
                     iconColor: const Color(0xFFE65100),
                   ),
                 ],
-
-                // Visit image
                 if (visit.imageUrl != null && visit.imageUrl!.length > 10) ...[
                   const SizedBox(height: 12),
                   const Divider(height: 1),
@@ -631,20 +628,13 @@ class _VisitDetailCard extends StatelessWidget {
           const SizedBox(width: 6),
           SizedBox(
             width: 70,
-            child: Text(
-              label,
-              style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 12),
-            ),
+            child: Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
           ),
           Expanded(
             child: Text(
               value,
               style: const TextStyle(
-                  color: Color(0xFF1A1A1A),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500),
+                  color: Color(0xFF1A1A1A), fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -660,11 +650,7 @@ class _VisitDetailCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-            color: color, fontSize: 11, fontWeight: FontWeight.w600),
-      ),
+      child: Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }

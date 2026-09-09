@@ -22,7 +22,6 @@ class AttendancePage extends StatefulWidget {
   final int employeeId;
   final String token;
 
-
   const AttendancePage({
     super.key,
     required this.employeeId,
@@ -44,7 +43,7 @@ class _AttendancePageState extends State<AttendancePage> {
   String odometerReading = '';
   String? currentLocation;
   String leaveReason = '';
-    TimeOfDay? loginTime;
+  TimeOfDay? loginTime;
 
   File? selfieImage;
   File? odometerImage;
@@ -55,18 +54,18 @@ class _AttendancePageState extends State<AttendancePage> {
   Map<String, dynamic>? todayAttendance;
   bool isFetchingAttendance = false;
 
-   @override
+  @override
   void initState() {
     super.initState();
     fetchProfileTimings();
   }
 
-   Future<void> fetchProfileTimings() async {
+  Future<void> fetchProfileTimings() async {
     final profile = await ApiService.getProfile();
     if (profile != null && profile["success"] == true) {
       final data = profile["data"];
       setState(() {
-        loginTime = _parseTimeOfDay(data["login_time"]);  
+        loginTime = _parseTimeOfDay(data["login_time"]);
       });
     }
   }
@@ -81,6 +80,7 @@ class _AttendancePageState extends State<AttendancePage> {
     final now = DateTime.now();
     return DateTime(now.year, now.month, now.day, t.hour, t.minute);
   }
+
   Future<void> fetchTodayAttendance() async {
     try {
       setState(() {
@@ -103,11 +103,10 @@ class _AttendancePageState extends State<AttendancePage> {
           vehicleType = data["vehicle_type"];
         });
 
-      
         debugPrint("FULL RESPONSE: $response");
         debugPrint("WORK TYPE: ${data["work_type"]}");
-debugPrint("TRAVEL MODE: ${data["travel_mode"]}");
-debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
+        debugPrint("TRAVEL MODE: ${data["travel_mode"]}");
+        debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
       } else {
         ScaffoldMessenger.of(
           context,
@@ -278,9 +277,9 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
   bool isFormValid() {
     if (attendanceType == null) return false;
 
-     if (attendanceType == "leave") {
-    return leaveReason.trim().isNotEmpty;
-  }
+    if (attendanceType == "leave") {
+      return leaveReason.trim().isNotEmpty;
+    }
 
     if (attendanceType == 'present' || attendanceType == 'day_over') {
       if (workType == null) return false;
@@ -360,24 +359,23 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
       return;
     }
 
-    final now = DateTime.now();
+    // final now = DateTime.now();
 
-     if (attendanceType == "present" && loginTime != null) {
-    final allowedLogin = _todayWithTime(loginTime!);
-    if (now.isBefore(allowedLogin)) {
-      Flushbar(
-        message: "You can't check in before ${loginTime!.format(context)}",
-        duration: const Duration(seconds: 3),
-        flushbarPosition: FlushbarPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        margin: const EdgeInsets.all(20),
-        borderRadius: BorderRadius.circular(8),
-        icon: const Icon(Icons.access_time, color: Colors.white),
-      ).show(context);
-      return;
-    }
-  }
-
+    // if (attendanceType == "present" && loginTime != null) {
+    //   final allowedLogin = _todayWithTime(loginTime!);
+    //   if (now.isBefore(allowedLogin)) {
+    //     Flushbar(
+    //       message: "You can't check in before ${loginTime!.format(context)}",
+    //       duration: const Duration(seconds: 3),
+    //       flushbarPosition: FlushbarPosition.BOTTOM,
+    //       backgroundColor: Colors.red,
+    //       margin: const EdgeInsets.all(20),
+    //       borderRadius: BorderRadius.circular(8),
+    //       icon: const Icon(Icons.access_time, color: Colors.white),
+    //     ).show(context);
+    //     return;
+    //   }
+    // }
 
     setState(() {
       isLoading = true;
@@ -418,15 +416,11 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
         try {
           currentLocation = await getFullLocationDetails();
         } catch (e) {
-          Flushbar(
+          showCenterToast(
+            context,
             message: "Unable to fetch location. Please enable GPS.",
-            duration: const Duration(seconds: 3),
-            flushbarPosition: FlushbarPosition.BOTTOM, //  bottom position
-            backgroundColor: Colors.red,
-            margin: const EdgeInsets.all(20),
-            borderRadius: BorderRadius.circular(8),
-            icon: const Icon(Icons.location_off, color: Colors.white),
-          ).show(context);
+            isSuccess: false,
+          );
 
           setState(() => isLoading = false);
           return;
@@ -465,15 +459,20 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
         leaveReason: leaveReason,
       );
 
-      Flushbar(
-        message: response['message'] ?? 'Attendance submitted',
-        duration: const Duration(seconds: 2),
-        flushbarPosition: FlushbarPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        margin: const EdgeInsets.all(20),
-        borderRadius: BorderRadius.circular(8),
-        icon: const Icon(Icons.check_circle, color: Colors.white),
-      ).show(context);
+      final bool isSuccess = response['success'] != false;
+
+      showCenterToast(
+        context,
+        message:
+            response['message'] ??
+            (isSuccess ? 'Attendance submitted' : 'Something went wrong'),
+        isSuccess: isSuccess,
+      );
+
+      if (!isSuccess) {
+        setState(() => isLoading = false);
+        return; // stop here — don't save prefs, don't start service, don't reset form
+      }
 
       final service = FlutterBackgroundService();
 
@@ -503,15 +502,11 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
 
         bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
         if (!serviceEnabled) {
-          await Flushbar(
+          showCenterToast(
+            context,
             message: "Please enable GPS",
-            duration: const Duration(seconds: 2),
-            flushbarPosition: FlushbarPosition.BOTTOM,
-            backgroundColor: Colors.orange,
-            margin: const EdgeInsets.all(20),
-            borderRadius: BorderRadius.circular(8),
-            icon: const Icon(Icons.location_on, color: Colors.white),
-          ).show(context);
+            isSuccess: false,
+          );
 
           await Geolocator.openLocationSettings();
           return;
@@ -623,65 +618,58 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
   }
 
   Widget _buildAttendanceInfoTile({
-  required IconData icon,
-  required String title,
-  required String value,
-}) {
-  return Container(
-    padding: const EdgeInsets.symmetric(
-      horizontal: 12,
-      vertical: 12,
-    ),
-    decoration: BoxDecoration(
-      color: Colors.blue.shade50,
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: Colors.blue, size: 16),
           ),
-          child: Icon(
-            icon,
-            color: Colors.blue,
-            size: 16,
-          ),
-        ),
 
-        const SizedBox(width: 14),
+          const SizedBox(width: 14),
 
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: Colors.grey.shade700,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 2),
+                const SizedBox(height: 2),
 
-              Text(
-                value.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
+                Text(
+                  value.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -710,17 +698,17 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
                   },
                 ),
                 OptionButton(
-  text: 'Day Over',
-  value: 'day_over',
-  selectedValue: attendanceType,
-  onTap: (val) async {
-    setState(() {
-      attendanceType = val;
-    });
+                  text: 'Day Over',
+                  value: 'day_over',
+                  selectedValue: attendanceType,
+                  onTap: (val) async {
+                    setState(() {
+                      attendanceType = val;
+                    });
 
-    await fetchTodayAttendance();
-  },
-),
+                    await fetchTodayAttendance();
+                  },
+                ),
                 OptionButton(
                   text: 'Leave',
                   value: 'leave',
@@ -776,28 +764,28 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
               ),
             ],
             if (attendanceType == 'leave') ...[
-  const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-  const Text(
-    'Leave Reason',
-    style: TextStyle(fontWeight: FontWeight.bold),
-  ),
+              const Text(
+                'Leave Reason',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
 
-  const SizedBox(height: 8),
+              const SizedBox(height: 8),
 
-  TextFormField(
-    decoration: const InputDecoration(
-      labelText: 'Enter Leave Reason',
-      border: OutlineInputBorder(),
-    ),
-    maxLines: 3,
-    onChanged: (val) {
-      setState(() {
-        leaveReason = val;
-      });
-    },
-  ),
-],
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Enter Leave Reason',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+                onChanged: (val) {
+                  setState(() {
+                    leaveReason = val;
+                  });
+                },
+              ),
+            ],
             if (attendanceType == 'present' && workType == 'field') ...[
               const SizedBox(height: 12),
               const Text(
@@ -958,99 +946,94 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
             ],
 
             if (attendanceType == 'day_over' && todayAttendance != null) ...[
-  const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-  Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(
-        color: Colors.blue.shade100,
-        width: 1.2,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.blue.shade100, width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(
+                          Icons.assignment_turned_in_rounded,
+                          color: Colors.blue,
+                          size: 20,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          "Today's Attendance Details",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
 
-        Row(
-          children: const [
-            Icon(
-              Icons.assignment_turned_in_rounded,
-              color: Colors.blue,
-              size: 20,
-            ),
-            SizedBox(width: 8),
-            Text(
-              "Today's Attendance Details",
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+                    const SizedBox(height: 18),
+
+                    _buildAttendanceInfoTile(
+                      icon: Icons.work_outline,
+                      title: "Work Type",
+                      value: workType ?? '-',
+                    ),
+
+                    if (workType == "field") ...[
+                      const SizedBox(height: 14),
+
+                      _buildAttendanceInfoTile(
+                        icon: Icons.route,
+                        title: "Travel Mode",
+                        value: travelMode ?? '-',
+                      ),
+                    ],
+
+                    if (vehicleType != null) ...[
+                      const SizedBox(height: 14),
+
+                      _buildAttendanceInfoTile(
+                        icon: Icons.directions_bike,
+                        title: "Vehicle Type",
+                        value: vehicleType!,
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 18),
-
-        _buildAttendanceInfoTile(
-          icon: Icons.work_outline,
-          title: "Work Type",
-          value: workType ?? '-',
-        ),
-
-        if (workType == "field") ...[
-          const SizedBox(height: 14),
-
-          _buildAttendanceInfoTile(
-            icon: Icons.route,
-            title: "Travel Mode",
-            value: travelMode ?? '-',
-          ),
-        ],
-
-        if (vehicleType != null) ...[
-          const SizedBox(height: 14),
-
-          _buildAttendanceInfoTile(
-            icon: Icons.directions_bike,
-            title: "Vehicle Type",
-            value: vehicleType!,
-          ),
-        ],
-      ],
-    ),
-  ),
-],
+            ],
 
             const SizedBox(height: 12),
 
-
             if (attendanceType != 'leave') ...[
-  const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-  Center(
-    child: ElevatedButton(
-      onPressed: () => pickImage('selfie'),
-      child: const Text('Take Selfie'),
-    ),
-  ),
+              Center(
+                child: ElevatedButton(
+                  onPressed: () => pickImage('selfie'),
+                  child: const Text('Take Selfie'),
+                ),
+              ),
 
-  if (selfieImage != null && selfieImage!.existsSync())
-    Image.file(selfieImage!, height: 150),
-],
+              if (selfieImage != null && selfieImage!.existsSync())
+                Image.file(selfieImage!, height: 150),
+            ],
+
             // if (selfieImage != null && selfieImage!.existsSync())
             //   Image.file(selfieImage!, height: 150),
-
             const SizedBox(height: 20),
             Center(
               child: GestureDetector(
@@ -1100,6 +1083,139 @@ debugPrint("VEHICLE TYPE: ${data["vehicle_type"]}");
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Center toast helper — top-level, outside the State class so it's a valid
+// Dart declaration and can be reused from anywhere in this file.
+// ---------------------------------------------------------------------------
+
+void showCenterToast(
+  BuildContext context, {
+  required String message,
+  required bool isSuccess,
+}) {
+  final overlay = Overlay.of(context);
+  late OverlayEntry entry;
+
+  entry = OverlayEntry(
+    builder: (context) => _AnimatedCenterToast(
+      message: message,
+      isSuccess: isSuccess,
+      onDismissed: () => entry.remove(),
+    ),
+  );
+
+  overlay.insert(entry);
+}
+
+class _AnimatedCenterToast extends StatefulWidget {
+  final String message;
+  final bool isSuccess;
+  final VoidCallback onDismissed;
+
+  const _AnimatedCenterToast({
+    required this.message,
+    required this.isSuccess,
+    required this.onDismissed,
+  });
+
+  @override
+  State<_AnimatedCenterToast> createState() => _AnimatedCenterToastState();
+}
+
+class _AnimatedCenterToastState extends State<_AnimatedCenterToast>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+      reverseDuration: const Duration(milliseconds: 200),
+    );
+
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _scale = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    );
+
+    _controller.forward();
+
+    // Hold, then reverse (fade+shrink out), then remove from overlay
+    Future.delayed(const Duration(milliseconds: 3000), () async {
+      if (!mounted) return;
+      await _controller.reverse();
+      widget.onDismissed();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Center(
+          child: FadeTransition(
+            opacity: _opacity,
+            child: ScaleTransition(
+              scale: _scale,
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: widget.isSuccess ? Colors.green : Colors.red,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 12,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        widget.isSuccess ? Icons.check_circle : Icons.error,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text(
+                          widget.message,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
